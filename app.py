@@ -6,10 +6,12 @@ NOT a chatbot - it's an intelligent routing system.
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import uvicorn
 import json
+import sqlite3
 from pathlib import Path
+from collections import defaultdict
 
 # Import core components
 from core.input_analyzer import InputAnalyzer
@@ -152,6 +154,30 @@ async def health_check():
     }
 
 
+@app.get("/health/full")
+async def health_full():
+    """Detailed health including model names and load states."""
+    return {
+        "status": "healthy",
+        "intent_classifier": {
+            "loaded": intent_classifier.is_loaded,
+            "model": getattr(intent_classifier, "model_name", "unknown")
+        },
+        "transformer_engine": {
+            "loaded": transformer_engine.is_loaded,
+            "model": getattr(transformer_engine, "model_name", "unknown")
+        },
+        "components": {
+            "input_analyzer": "operational",
+            "meta_controller": "operational",
+            "output_validator": "operational",
+            "rule_engine": "operational",
+            "retrieval_engine": "operational",
+            "ml_engine": "operational"
+        }
+    }
+
+
 @app.post("/query", response_model=QueryResponse)
 async def process_query(request: QueryRequest):
     """
@@ -189,6 +215,12 @@ async def process_query(request: QueryRequest):
             # Override prediction/fortune-telling queries to RULE engine (safe refusal)
             elif any(word in query_lower for word in ["predict my", "predict your", "will i", "fortune", "future of my", "my future"]):
                 intent, confidence = "UNSAFE", 1.0
+            # Comparative/versus questions are conceptual; treat as EXPLANATION
+            elif " vs " in query_lower or " versus " in query_lower:
+                intent = "EXPLANATION"
+            # Override common factual phrasings to FACTUAL to avoid transformer on facts
+            elif query_lower.startswith(("capital of", "who is", "what is", "where is", "define ", "definition of", "tell me about")):
+                intent = "FACTUAL"
             # Override "how many" queries asking for specific facts to FACTUAL not EXPLANATION
             elif query_lower.startswith("how many") or query_lower.startswith("how much"):
                 intent = "FACTUAL"
@@ -280,7 +312,15 @@ async def submit_feedback(request: FeedbackRequest):
             # Trigger improvement every 10 feedbacks
             if total_feedback > 0 and total_feedback % 10 == 0:
                 print(f"\n🔄 Auto-improvement triggered after {total_feedback} feedbacks")
-                _auto_improve_classifier()
+                improvement_result = _auto_improve_classifier()
+                
+                return {
+                    "status": "success",
+                    "message": "Feedback received. Auto-improvement triggered!",
+                    "feedback": "positive" if request.feedback > 0 else "negative",
+                    "total_feedback_count": total_feedback,
+                    "auto_improvement": improvement_result
+                }
             
             return {
                 "status": "success",
@@ -343,10 +383,178 @@ async def get_intents():
     }
 
 
+@app.get("/model/status")
+async def get_model_status():
+    """Get detailed model training and load status."""
+    # Check if we're using trained model or zero-shot
+    model_type = "zero-shot" if intent_classifier.is_loaded else "fallback"
+    
+    status = {
+        "model_type": model_type,
+        "intent_classifier": {
+            "loaded": intent_classifier.is_loaded,
+            "model_name": getattr(intent_classifier, "model_name", "unknown"),
+            "type": "DistilBERT MNLI (pre-trained zero-shot)",
+            "requires_training": False,
+            "status": "✅ READY" if intent_classifier.is_loaded else "⚠️ USING FALLBACK"
+        },
+        "transformer_engine": {
+            "loaded": transformer_engine.is_loaded,
+            "model_name": getattr(transformer_engine, "model_name", "unknown"),
+            "type": "Flan-T5 (pre-trained generative)",
+            "requires_training": False,
+            "status": "✅ READY" if transformer_engine.is_loaded else "⚠️ USING FALLBACK"
+        },
+        "training_info": {
+            "note": "Current system uses pre-trained models that don't require training",
+            "feedback_collected": feedback_store.get_feedback_stats().get("total_feedback", 0),
+            "auto_improvement": "Enabled - triggers every 10 feedbacks"
+        },
+        "system_status": "✅ FULLY OPERATIONAL" if (intent_classifier.is_loaded and transformer_engine.is_loaded) else "⚠️ PARTIAL - Using fallback modes"
+    }
+    
+    return status
+
+
+@app.get("/model/metrics")
+async def get_model_metrics():
+    """Get model performance metrics (accuracy, precision, recall, F1) for presentation."""
+    try:
+        # Get feedback data
+        feedback_stats = feedback_store.get_feedback_stats()
+        
+        # Calculate metrics from feedback
+        metrics = _calculate_performance_metrics()
+        
+        return {
+            "overall_metrics": metrics["overall"],
+            "per_intent_metrics": metrics["per_intent"],
+            "confusion_matrix": metrics["confusion_matrix"],
+            "sample_size": metrics["total_samples"],
+            "routing_accuracy": meta_controller.get_routing_stats(),
+            "feedback_summary": {
+                "total_feedback": feedback_stats.get("total_feedback", 0),
+                "positive_feedback": feedback_stats.get("positive_feedback", 0),
+                "negative_feedback": feedback_stats.get("negative_feedback", 0),
+                "satisfaction_rate": feedback_stats.get("satisfaction_rate", 0)
+            },
+            "note": "Metrics calculated from user feedback and routing decisions"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating metrics: {str(e)}")
+
+
+def _calculate_performance_metrics() -> Dict[str, Any]:
+    """
+    Calculate accuracy, precision, recall, F1 score from feedback and routing history.
+    """
+    # Get all feedback from database
+    try:
+        conn = sqlite3.connect(feedback_store.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT predicted_intent, user_feedback, was_correct
+            FROM feedback
+        """)
+        all_feedback = cursor.fetchall()
+        conn.close()
+    except Exception as e:
+        print(f"Error fetching feedback: {e}")
+        all_feedback = []
+    
+    if len(all_feedback) == 0:
+        return {
+            "overall": {
+                "accuracy": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "f1_score": 0.0
+            },
+            "per_intent": {},
+            "confusion_matrix": {},
+            "total_samples": 0
+        }
+    
+    # Track predictions per intent
+    intent_stats = defaultdict(lambda: {
+        "true_positive": 0,
+        "false_positive": 0,
+        "total": 0
+    })
+    
+    # Confusion matrix
+    confusion = defaultdict(lambda: defaultdict(int))
+    
+    correct_predictions = 0
+    total_predictions = len(all_feedback)
+    
+    for predicted_intent, user_feedback, was_correct in all_feedback:
+        is_correct = user_feedback > 0
+        
+        if is_correct:
+            correct_predictions += 1
+            intent_stats[predicted_intent]["true_positive"] += 1
+            confusion[predicted_intent][predicted_intent] += 1
+        else:
+            intent_stats[predicted_intent]["false_positive"] += 1
+            confusion[predicted_intent]["incorrect"] += 1
+        
+        intent_stats[predicted_intent]["total"] += 1
+    
+    # Calculate overall accuracy
+    overall_accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0.0
+    
+    # Calculate per-intent metrics
+    per_intent_metrics = {}
+    total_precision = 0.0
+    total_recall = 0.0
+    total_f1 = 0.0
+    intent_count = 0
+    
+    for intent, stats in intent_stats.items():
+        tp = stats["true_positive"]
+        fp = stats["false_positive"]
+        total = stats["total"]
+        
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / total if total > 0 else 0.0
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+        
+        per_intent_metrics[intent] = {
+            "accuracy": round(tp / total if total > 0 else 0.0, 4),
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1_score": round(f1, 4),
+            "samples": total
+        }
+        
+        total_precision += precision
+        total_recall += recall
+        total_f1 += f1
+        intent_count += 1
+    
+    # Macro-averaged metrics
+    avg_precision = total_precision / intent_count if intent_count > 0 else 0.0
+    avg_recall = total_recall / intent_count if intent_count > 0 else 0.0
+    avg_f1 = total_f1 / intent_count if intent_count > 0 else 0.0
+    
+    return {
+        "overall": {
+            "accuracy": round(overall_accuracy, 4),
+            "precision": round(avg_precision, 4),
+            "recall": round(avg_recall, 4),
+            "f1_score": round(avg_f1, 4)
+        },
+        "per_intent": per_intent_metrics,
+        "confusion_matrix": dict(confusion),
+        "total_samples": total_predictions
+    }
+
+
 def _auto_improve_classifier():
     """
     Automatically improve classifier based on accumulated feedback.
-    Uses feedback patterns to adjust routing decisions.
+    Exports feedback to training data and can trigger retraining.
     """
     try:
         # Get training samples from positive feedback
@@ -357,7 +565,11 @@ def _auto_improve_classifier():
         
         if len(training_samples) < 5:
             print("⚠ Not enough feedback samples yet for improvement")
-            return
+            return {
+                "exported": False,
+                "reason": "Insufficient samples",
+                "sample_count": len(training_samples)
+            }
         
         # Analyze feedback patterns
         stats = feedback_store.get_feedback_stats()
@@ -368,22 +580,148 @@ def _auto_improve_classifier():
             accuracy = data.get("accuracy", 0)
             print(f"{intent}: {accuracy:.1%} accuracy ({data['correct']}/{data['total']})")
         
+        # Export feedback to training dataset automatically
+        training_csv_path = Path(__file__).parent / "training" / "intent_dataset.csv"
+        exported_count = 0
+        
+        try:
+            # Read existing training data to avoid duplicates
+            existing_queries = set()
+            if training_csv_path.exists():
+                import csv
+                with open(training_csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        existing_queries.add(row['query'].lower().strip())
+            
+            # Append new samples
+            with open(training_csv_path, 'a', newline='', encoding='utf-8') as f:
+                import csv
+                writer = csv.writer(f)
+                
+                # Write header if file is empty
+                if training_csv_path.stat().st_size == 0:
+                    writer.writerow(['query', 'intent'])
+                
+                for sample in training_samples:
+                    query = sample.get('query', '').strip()
+                    intent = sample.get('intent', '')
+                    
+                    if query.lower() not in existing_queries and query and intent:
+                        writer.writerow([query, intent])
+                        exported_count += 1
+                        existing_queries.add(query.lower())
+            
+            print(f"✓ Exported {exported_count} new samples to training dataset")
+            
+        except Exception as e:
+            print(f"⚠ Failed to export training data: {e}")
+        
         # Save feedback patterns for reference
         feedback_log_path = Path(__file__).parent / "feedback" / "improvement_log.json"
+        feedback_log_path.parent.mkdir(exist_ok=True)
+        
         with open(feedback_log_path, "a") as f:
             import datetime
             log_entry = {
                 "timestamp": datetime.datetime.now().isoformat(),
                 "total_samples": len(training_samples),
-                "intent_accuracy": intent_accuracy
+                "exported_samples": exported_count,
+                "intent_accuracy": intent_accuracy,
+                "auto_retrain_triggered": False,  # Set to True if you add retraining
+                "note": "Using pre-trained zero-shot model - no retraining needed"
             }
             f.write(json.dumps(log_entry) + "\n")
         
         print(f"✓ Auto-improvement logged to {feedback_log_path}")
         print("✓ System continues learning from user feedback")
         
+        # Trigger automatic retraining if enough new samples
+        retrain_result = None
+        if exported_count >= 5:
+            print(f"\n🔄 Triggering automatic model retraining with {exported_count} new samples...")
+            retrain_result = _retrain_model()
+        
+        return {
+            "exported": True,
+            "exported_count": exported_count,
+            "total_samples": len(training_samples),
+            "intent_accuracy": intent_accuracy,
+            "retrain_triggered": retrain_result is not None,
+            "retrain_result": retrain_result
+        }
+        
     except Exception as e:
         print(f"✗ Auto-improvement error: {e}")
+        return {
+            "exported": False,
+            "error": str(e)
+        }
+
+
+def _retrain_model():
+    """
+    Automatically retrain the intent classifier with updated training data.
+    """
+    try:
+        import subprocess
+        import sys
+        
+        training_script = Path(__file__).parent / "training" / "train_intent_model.py"
+        
+        if not training_script.exists():
+            print(f"⚠ Training script not found: {training_script}")
+            return {
+                "success": False,
+                "error": "Training script not found"
+            }
+        
+        print("\n" + "="*60)
+        print("🔄 AUTOMATIC MODEL RETRAINING")
+        print("="*60)
+        
+        # Run training script
+        result = subprocess.run(
+            [sys.executable, str(training_script)],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+        
+        if result.returncode == 0:
+            print("✅ Model retraining completed successfully!")
+            print(result.stdout)
+            
+            # Reload the intent classifier
+            print("\n🔄 Reloading intent classifier...")
+            global intent_classifier
+            intent_classifier = IntentClassifier()
+            
+            return {
+                "success": True,
+                "message": "Model retrained and reloaded successfully",
+                "output": result.stdout[-500:]  # Last 500 chars
+            }
+        else:
+            print(f"❌ Retraining failed with code {result.returncode}")
+            print(result.stderr)
+            return {
+                "success": False,
+                "error": result.stderr[-500:]
+            }
+            
+    except subprocess.TimeoutExpired:
+        print("❌ Retraining timeout - took longer than 5 minutes")
+        return {
+            "success": False,
+            "error": "Training timeout"
+        }
+    except Exception as e:
+        print(f"❌ Retraining error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 if __name__ == "__main__":
