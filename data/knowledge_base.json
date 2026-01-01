@@ -1,0 +1,69 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-01-01",
+    "description": "Local knowledge base for factual queries"
+  },
+  "facts": [
+    {
+      "question": "What is the minimum attendance requirement?",
+      "answer": "The minimum attendance requirement is 75% for all courses. Students must maintain at least 75% attendance to be eligible for final examinations.",
+      "keywords": ["attendance", "minimum", "requirement", "75%", "eligibility"],
+      "category": "academic_policy"
+    },
+    {
+      "question": "What is meta-learning?",
+      "answer": "Meta-learning is an approach in machine learning where a model learns how to learn. It involves training systems that can adapt quickly to new tasks with minimal data by leveraging knowledge from previous learning experiences.",
+      "keywords": ["meta-learning", "learning to learn", "machine learning", "adaptation"],
+      "category": "ai_concepts"
+    },
+    {
+      "question": "What are library hours?",
+      "answer": "The library is open Monday to Friday from 8:00 AM to 8:00 PM, and Saturday from 9:00 AM to 5:00 PM. The library is closed on Sundays and public holidays.",
+      "keywords": ["library", "hours", "timing", "schedule"],
+      "category": "facilities"
+    },
+    {
+      "question": "What is Python?",
+      "answer": "Python is a high-level, interpreted programming language known for its simplicity and readability. It supports multiple programming paradigms and has extensive libraries for various applications including web development, data science, and artificial intelligence.",
+      "keywords": ["python", "programming", "language", "coding"],
+      "category": "technology"
+    },
+    {
+      "question": "What is artificial intelligence?",
+      "answer": "Artificial Intelligence (AI) is the simulation of human intelligence processes by machines, especially computer systems. These processes include learning, reasoning, problem-solving, perception, and language understanding.",
+      "keywords": ["artificial intelligence", "ai", "machine learning", "intelligence"],
+      "category": "ai_concepts"
+    },
+    {
+      "question": "What is the grading system?",
+      "answer": "The grading system uses letter grades: A (90-100), B (80-89), C (70-79), D (60-69), and F (below 60). GPA is calculated on a 4.0 scale where A=4.0, B=3.0, C=2.0, D=1.0, and F=0.0.",
+      "keywords": ["grading", "grades", "gpa", "marks", "evaluation"],
+      "category": "academic_policy"
+    },
+    {
+      "question": "What is machine learning?",
+      "answer": "Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. It uses algorithms to analyze data, identify patterns, and make decisions with minimal human intervention.",
+      "keywords": ["machine learning", "ml", "algorithms", "learning", "ai"],
+      "category": "ai_concepts"
+    },
+    {
+      "question": "What is deep learning?",
+      "answer": "Deep learning is a subset of machine learning that uses artificial neural networks with multiple layers (deep neural networks) to progressively extract higher-level features from raw input. It's particularly effective for tasks like image recognition and natural language processing.",
+      "keywords": ["deep learning", "neural networks", "ai", "learning"],
+      "category": "ai_concepts"
+    },
+    {
+      "question": "What is the course duration?",
+      "answer": "The standard undergraduate program duration is 4 years (8 semesters), while graduate programs typically last 2 years (4 semesters). Some specialized programs may have different durations.",
+      "keywords": ["duration", "course", "program", "years", "semesters"],
+      "category": "academic_policy"
+    },
+    {
+      "question": "What are the admission requirements?",
+      "answer": "Admission requirements include: completed application form, high school transcripts or equivalent, standardized test scores (SAT/ACT), letters of recommendation, personal statement, and proof of English proficiency for international students.",
+      "keywords": ["admission", "requirements", "application", "enrollment"],
+      "category": "admissions"
+    }
+  ]
+}

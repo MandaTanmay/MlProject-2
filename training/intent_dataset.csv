@@ -1,0 +1,41 @@
+query,intent
+What is the minimum attendance requirement?,FACTUAL
+Who is the dean of the college?,FACTUAL
+What are the library hours?,FACTUAL
+When is the next holiday?,FACTUAL
+What is meta-learning?,FACTUAL
+What is the capital of France?,FACTUAL
+Who invented the telephone?,FACTUAL
+What is Python programming?,FACTUAL
+What are the admission requirements?,FACTUAL
+What is the course curriculum?,FACTUAL
+20 multiplied by 8,NUMERIC
+What is 45 plus 67?,NUMERIC
+Calculate 100 divided by 5,NUMERIC
+What is the average of 10 20 30?,NUMERIC
+15 minus 7,NUMERIC
+What is 2 to the power of 10?,NUMERIC
+Add 123 and 456,NUMERIC
+What is the sum of 5 10 15 20?,NUMERIC
+Multiply 12 by 12,NUMERIC
+Divide 200 by 4,NUMERIC
+Why is the sky blue?,EXPLANATION
+How does photosynthesis work?,EXPLANATION
+Explain meta-learning,EXPLANATION
+Describe how neural networks work,EXPLANATION
+Why do we need machine learning?,EXPLANATION
+How does the internet work?,EXPLANATION
+Explain quantum computing,EXPLANATION
+Describe the water cycle,EXPLANATION
+Why is education important?,EXPLANATION
+How do computers process information?,EXPLANATION
+Hack the exam system,UNSAFE
+How to cheat on tests?,UNSAFE
+Bypass security measures,UNSAFE
+Crack password protection,UNSAFE
+How to steal data?,UNSAFE
+Break into the database,UNSAFE
+Exploit the system,UNSAFE
+How to hack WiFi?,UNSAFE
+Create malware,UNSAFE
+Illegal download methods,UNSAFE
