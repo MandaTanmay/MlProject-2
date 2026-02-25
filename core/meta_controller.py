@@ -16,7 +16,7 @@ class MetaController:
     ROUTING_MAP = {
         "FACTUAL": "RETRIEVAL",
         "NUMERIC": "ML",
-        "EXPLANATION": "TRANSFORMER",
+        "EXPLANATION": "TRANSFORMER",  # ENABLED: Explanation queries use transformer engine
         "UNSAFE": "RULE"
     }
     
@@ -73,7 +73,7 @@ class MetaController:
         reasons = {
             "FACTUAL": f"Query classified as FACTUAL (confidence: {confidence:.2f}). Routing to RETRIEVAL engine to fetch verified facts.",
             "NUMERIC": f"Query classified as NUMERIC (confidence: {confidence:.2f}). Routing to ML engine for deterministic computation.",
-            "EXPLANATION": f"Query classified as EXPLANATION (confidence: {confidence:.2f}). Routing to TRANSFORMER engine for conceptual explanation.",
+            "EXPLANATION": f"Query classified as EXPLANATION (confidence: {confidence:.2f}). Routing to TRANSFORMER engine for conceptual explanations.",
             "UNSAFE": f"Query classified as UNSAFE (confidence: {confidence:.2f}). Routing to RULE engine for safe refusal."
         }
         

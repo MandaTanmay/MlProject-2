@@ -20,7 +20,7 @@ class RuleEngine:
             'hack', 'cheat', 'bypass', 'crack', 'exploit', 
             'steal', 'illegal', 'break into', 'unauthorized',
             'password', 'phishing', 'malware', 'virus',
-            'ddos', 'sql injection', 'xss', 'breach'
+            'ddos', 'sql injection', 'xss', 'breach','kill'
         ]
         
         # Academic integrity violations
@@ -33,7 +33,8 @@ class RuleEngine:
         # Harmful content
         self.harmful_patterns = [
             'how to hurt', 'how to harm', 'how to attack',
-            'how to damage', 'make a weapon', 'create poison'
+            'how to damage', 'make a weapon', 'create poison',
+            'how to kill', 'assassinate', 'bomb making'
         ]
         
         self.refusal_count = 0

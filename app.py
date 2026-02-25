@@ -215,6 +215,12 @@ async def process_query(request: QueryRequest):
             # Override prediction/fortune-telling queries to RULE engine (safe refusal)
             elif any(word in query_lower for word in ["predict my", "predict your", "will i", "fortune", "future of my", "my future"]):
                 intent, confidence = "UNSAFE", 1.0
+            # If the user says "explain about <topic>" and it's factual (e.g., a language), keep it FACTUAL
+            elif query_lower.startswith("explain about") or (query_lower.startswith("explain") and " language" in query_lower):
+                intent = "FACTUAL"
+            # Otherwise generic explain/describe go to EXPLANATION
+            elif query_lower.startswith("explain") or query_lower.startswith("describe"):
+                intent = "EXPLANATION"
             # Comparative/versus questions are conceptual; treat as EXPLANATION
             elif " vs " in query_lower or " versus " in query_lower:
                 intent = "EXPLANATION"
