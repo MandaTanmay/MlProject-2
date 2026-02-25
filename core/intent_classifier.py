@@ -14,9 +14,9 @@ warnings.filterwarnings('ignore')
 try:
     from transformers import pipeline
     TRANSFORMERS_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception) as e:
     TRANSFORMERS_AVAILABLE = False
-    print("⚠ transformers library not installed. Install with: pip install transformers torch")
+    print(f"⚠ transformers library not available ({type(e).__name__}). Using fallback classification.")
 
 
 class IntentClassifier:
