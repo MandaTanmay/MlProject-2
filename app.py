@@ -11,7 +11,7 @@ except LookupError:
     nltk.download('brown')
     nltk.download('punkt')
     nltk.download('wordnet')
-    
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -416,9 +416,11 @@ async def process_query(request: QueryRequest):
         )
     except HTTPException:
         raise
+    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
+        print("FULL TRACEBACK:")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/feedback")
 async def submit_feedback(request: FeedbackRequest):

@@ -49,6 +49,7 @@ class MetaController:
         query: str,
         query_features: Dict[str, Any] = None
     ) -> Dict[str, Any]:
+
         """
         Full orchestration: intent classification → execution planning → routing.
         
@@ -60,9 +61,48 @@ class MetaController:
             Orchestration plan with intents, engines, and reasoning
         """
         start_time = datetime.now()
-        
-        # Step 1: Classify query intents
-        classification = self.intent_classifier.classify(query)
+        query_lower = query.lower().strip()
+
+        # 🔴 HARD OVERRIDE RULES
+        query_lower = query.lower().strip()
+
+        classification = None
+
+        if query_lower.startswith(("what is", "who is", "define", "where is", "when was")):
+            classification = {
+                "scores": {
+                    "FACTUAL": 1.0,
+                    "NUMERIC": 0.0,
+                    "EXPLANATION": 0.0,
+                    "UNSAFE": 0.0
+                },
+                "active_intents": ["FACTUAL"],
+                "primary_intent": "FACTUAL",
+                "primary_confidence": 1.0,
+                "threshold": 0.5,
+                "method": "rule_override",
+                "classification_time_ms": 0
+            }
+
+        elif query_lower.startswith(("how much", "calculate", "compute")):
+            classification = {
+                "scores": {
+                    "FACTUAL": 0.0,
+                    "NUMERIC": 1.0,
+                    "EXPLANATION": 0.0,
+                    "UNSAFE": 0.0
+                },
+                "active_intents": ["NUMERIC"],
+                "primary_intent": "NUMERIC",
+                "primary_confidence": 1.0,
+                "threshold": 0.5,
+                "method": "rule_override",
+                "classification_time_ms": 0
+            }
+
+        # If no override matched → run normal classifier
+        if classification is None:
+            classification = self.intent_classifier.classify(query)
         
         # Step 2: Check for UNSAFE (overrides everything)
         if "UNSAFE" in classification["active_intents"]:
