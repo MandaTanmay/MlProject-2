@@ -138,6 +138,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+
     """Health check endpoint."""
     return {
         "status": "healthy",
@@ -180,92 +181,125 @@ async def health_full():
 
 @app.post("/query", response_model=QueryResponse)
 async def process_query(request: QueryRequest):
-    """
-    Process a user query through the meta-learning pipeline.
-    
-    Pipeline:
-    1. Input Analyzer - Extract features
-    2. Intent Classifier - Classify intent
-    3. Meta-Controller - Route to engine
-    4. Engine Execution - Get answer
-    5. Output Validator - Validate answer
-    6. Return response
-    """
+
     try:
         query = request.query.strip()
-        
+
         if not query:
             raise HTTPException(status_code=400, detail="Query cannot be empty")
-        
-        # Step 1: Analyze input
+
+        # ------------------------------------------------
+        # STEP 1: HARD SAFETY CHECK (Before Everything)
+        # ------------------------------------------------
+        from core.safety import is_harmful_input
+
+        if is_harmful_input(query):
+            return QueryResponse(
+                answer="I'm not able to assist with harmful or dangerous requests.",
+                strategy="SAFETY",
+                confidence=1.0,
+                reason="Blocked by safety layer before classification.",
+                metadata={
+                    "intent": "UNSAFE",
+                    "intent_confidence": 1.0
+                }
+            )
+
+        # ------------------------------------------------
+        # STEP 2: Feature Extraction
+        # ------------------------------------------------
         features = input_analyzer.analyze(query)
-        
-        # Step 2: Classify intent (ML) then apply deterministic safety/math overrides
+
+        # ------------------------------------------------
+        # STEP 3: ML Intent Classification
+        # ------------------------------------------------
         intent, confidence = intent_classifier.predict(query)
 
-        # Deterministic overrides to avoid misrouting simple math or unsafe content
         query_lower = query.lower()
+
+        # ------------------------------------------------
+        # STEP 4: Deterministic Overrides
+        # ------------------------------------------------
+
+        # Unsafe keyword override
         if features.get("has_unsafe_keywords"):
             intent, confidence = "UNSAFE", 1.0
+
         else:
-            # Treat pure math/digit queries as NUMERIC even if classifier is uncertain
-            simple_math_pattern = all(ch.isdigit() or ch in "+-*/ ." for ch in query)
-            if (features.get("has_digits") and features.get("has_math_operators")) or simple_math_pattern:
+
+            # 🔥 Strong numeric override (natural language math)
+            math_words = [
+                "add", "plus", "subtract", "minus",
+                "multiply", "multiplied", "divide", "divided",
+                "times", "average", "sum"
+            ]
+
+            if any(word in query_lower for word in math_words) and any(char.isdigit() for char in query):
+                intent, confidence = "NUMERIC", 1.0
+
+            # Pure operator-based math
+            elif (features.get("has_digits") and features.get("has_math_operators")):
                 intent, confidence = "NUMERIC", max(confidence, 0.9)
-            # Override prediction/fortune-telling queries to RULE engine (safe refusal)
-            elif any(word in query_lower for word in ["predict my", "predict your", "will i", "fortune", "future of my", "my future"]):
-                intent, confidence = "UNSAFE", 1.0
-            # If the user says "explain about <topic>" and it's factual (e.g., a language), keep it FACTUAL
-            elif query_lower.startswith("explain about") or (query_lower.startswith("explain") and " language" in query_lower):
-                intent = "FACTUAL"
-            # Otherwise generic explain/describe go to EXPLANATION
+
+            # Simple numeric-only queries
+            elif all(ch.isdigit() or ch in "+-*/. " for ch in query):
+                intent, confidence = "NUMERIC", 1.0
+
+            # Explanation overrides
             elif query_lower.startswith("explain") or query_lower.startswith("describe"):
                 intent = "EXPLANATION"
-            # Comparative/versus questions are conceptual; treat as EXPLANATION
+
+            # Comparative conceptual queries
             elif " vs " in query_lower or " versus " in query_lower:
                 intent = "EXPLANATION"
-            # Override common factual phrasings to FACTUAL to avoid transformer on facts
-            elif query_lower.startswith(("capital of", "who is", "what is", "where is", "define ", "definition of", "tell me about")):
+
+            # Factual phrasing overrides
+            elif query_lower.startswith(("what is", "who is", "define", "where is", "how many", "how much")):
                 intent = "FACTUAL"
-            # Override "how many" queries asking for specific facts to FACTUAL not EXPLANATION
-            elif query_lower.startswith("how many") or query_lower.startswith("how much"):
-                intent = "FACTUAL"
-            elif features.get("question_type") == "EXPLANATION":
-                intent = "EXPLANATION"
-            elif features.get("question_type") == "FACTUAL":
-                intent = "FACTUAL"
-        
-        # Step 3: Route to engine
+
+        # ------------------------------------------------
+        # STEP 5: Route to Engine
+        # ------------------------------------------------
         engine_name, routing_reason = meta_controller.route(intent, confidence, features)
-        
-        # Step 4: Execute appropriate engine
+
+        # ------------------------------------------------
+        # STEP 6: Execute Engine
+        # ------------------------------------------------
         if engine_name == "RULE":
             result = rule_engine.execute(query, features)
+
         elif engine_name == "RETRIEVAL":
             result = retrieval_engine.execute(query, features)
+
         elif engine_name == "ML":
             result = ml_engine.execute(query, features)
+
         elif engine_name == "TRANSFORMER":
             result = transformer_engine.execute(query, features)
+
         else:
             raise HTTPException(status_code=500, detail=f"Unknown engine: {engine_name}")
-        
-        # Step 5: Validate output
+
+        # ------------------------------------------------
+        # STEP 7: Output Validation
+        # ------------------------------------------------
         is_valid, validated_answer, validation_details = output_validator.validate(
             answer=result["answer"],
             strategy=result["strategy"],
             confidence=result["confidence"],
             query=query
         )
-        
-        # Store query context for feedback
+
+        # Store context for feedback
         query_context_cache[query] = {
             "intent": intent,
             "confidence": confidence
         }
-        
-        # Prepare response
-        response = QueryResponse(
+
+        # ------------------------------------------------
+        # STEP 8: Return Response
+        # ------------------------------------------------
+        return QueryResponse(
             answer=validated_answer,
             strategy=result["strategy"],
             confidence=result["confidence"],
@@ -278,11 +312,10 @@ async def process_query(request: QueryRequest):
                 "computation_type": result.get("computation_type")
             }
         )
-        
-        return response
-        
+
     except HTTPException:
         raise
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
@@ -383,8 +416,8 @@ async def get_intents():
         "description": {
             "FACTUAL": "Factual queries - routed to RETRIEVAL engine",
             "NUMERIC": "Numerical computations - routed to ML engine",
-            "EXPLANATION": "Conceptual explanations - routed to TRANSFORMER engine",
-            "UNSAFE": "Unsafe/restricted queries - routed to RULE engine"
+            "EXPLANATION": "Conceptual explanations - routed to TRANSFORMER engine"
+            
         }
     }
 

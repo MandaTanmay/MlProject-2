@@ -25,14 +25,14 @@ class IntentClassifier:
     Decides which engine should handle the query.
     """
     
-    INTENTS = ["FACTUAL", "NUMERIC", "EXPLANATION", "UNSAFE"]
+    INTENTS = ["FACTUAL", "NUMERIC", "EXPLANATION"]
     
     # Intent labels for zero-shot classification
     INTENT_LABELS = [
         "factual information query",
         "numerical calculation or math problem",
         "explanation or conceptual question",
-        "unsafe or malicious request"
+        
     ]
     
     def __init__(self, model_name: str = "typeform/distilbert-base-uncased-mnli"):
@@ -79,6 +79,7 @@ class IntentClassifier:
         Returns:
             Tuple of (predicted_intent, confidence_score)
         """
+        
         if not self.is_loaded:
             # Fallback to rule-based classification if model not loaded
             return self._fallback_prediction(query)
@@ -96,7 +97,7 @@ class IntentClassifier:
                 "factual information query": "FACTUAL",
                 "numerical calculation or math problem": "NUMERIC",
                 "explanation or conceptual question": "EXPLANATION",
-                "unsafe or malicious request": "UNSAFE"
+                
             }
             
             intent = label_to_intent.get(predicted_label, "FACTUAL")
@@ -106,6 +107,7 @@ class IntentClassifier:
         except Exception as e:
             print(f"✗ Prediction error: {e}")
             return self._fallback_prediction(query)
+            
     
     def _fallback_prediction(self, query: str) -> Tuple[str, float]:
         """
@@ -119,10 +121,6 @@ class IntentClassifier:
         """
         query_lower = query.lower()
         
-        # Check for unsafe patterns
-        unsafe_keywords = ['hack', 'cheat', 'bypass', 'crack', 'exploit', 'steal', 'illegal', 'break into']
-        if any(keyword in query_lower for keyword in unsafe_keywords):
-            return "UNSAFE", 1.0
         
         # Check for numeric patterns
         math_operators = ['+', '-', '*', '/', 'multiply', 'divide', 'add', 'subtract', 'plus', 'minus', 'times', 'average', 'sum']

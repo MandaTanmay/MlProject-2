@@ -17,7 +17,7 @@ class MetaController:
         "FACTUAL": "RETRIEVAL",
         "NUMERIC": "ML",
         "EXPLANATION": "TRANSFORMER",  # ENABLED: Explanation queries use transformer engine
-        "UNSAFE": "RULE"
+        
     }
     
     def __init__(self):
@@ -38,8 +38,9 @@ class MetaController:
             Tuple of (engine_name, routing_reason)
         """
         # Hard enforcement: If unsafe keywords detected, override to RULE engine
-        if query_features.get("has_unsafe_keywords", False):
-            intent = "UNSAFE"
+        
+        
+        # Check for unsafe patterns
         
         # Get engine from routing map
         engine = self.ROUTING_MAP.get(intent, "RULE")
