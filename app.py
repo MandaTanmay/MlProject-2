@@ -138,6 +138,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+
     """Health check endpoint."""
     return {
         "status": "healthy",
@@ -199,41 +200,51 @@ async def process_query(request: QueryRequest):
         
         # Step 1: Analyze input
         features = input_analyzer.analyze(query)
-        
+
+        from core.safety import is_harmful_input
+
+        if is_harmful_input(query):
+            return QueryResponse(
+                answer="I'm not able to assist with harmful or dangerous requests.",
+                strategy="SAFETY",
+                confidence=1.0,
+                reason="Blocked by safety layer before classification.",
+                metadata={"intent": "BLOCKED"}
+            )
+
         # Step 2: Classify intent (ML) then apply deterministic safety/math overrides
+        
         intent, confidence = intent_classifier.predict(query)
 
         # Deterministic overrides to avoid misrouting simple math or unsafe content
         query_lower = query.lower()
-        if features.get("has_unsafe_keywords"):
-            intent, confidence = "UNSAFE", 1.0
-        else:
-            # Treat pure math/digit queries as NUMERIC even if classifier is uncertain
-            simple_math_pattern = all(ch.isdigit() or ch in "+-*/ ." for ch in query)
-            if (features.get("has_digits") and features.get("has_math_operators")) or simple_math_pattern:
-                intent, confidence = "NUMERIC", max(confidence, 0.9)
-            # Override prediction/fortune-telling queries to RULE engine (safe refusal)
-            elif any(word in query_lower for word in ["predict my", "predict your", "will i", "fortune", "future of my", "my future"]):
-                intent, confidence = "UNSAFE", 1.0
-            # If the user says "explain about <topic>" and it's factual (e.g., a language), keep it FACTUAL
-            elif query_lower.startswith("explain about") or (query_lower.startswith("explain") and " language" in query_lower):
-                intent = "FACTUAL"
-            # Otherwise generic explain/describe go to EXPLANATION
-            elif query_lower.startswith("explain") or query_lower.startswith("describe"):
-                intent = "EXPLANATION"
-            # Comparative/versus questions are conceptual; treat as EXPLANATION
-            elif " vs " in query_lower or " versus " in query_lower:
-                intent = "EXPLANATION"
-            # Override common factual phrasings to FACTUAL to avoid transformer on facts
-            elif query_lower.startswith(("capital of", "who is", "what is", "where is", "define ", "definition of", "tell me about")):
-                intent = "FACTUAL"
-            # Override "how many" queries asking for specific facts to FACTUAL not EXPLANATION
-            elif query_lower.startswith("how many") or query_lower.startswith("how much"):
-                intent = "FACTUAL"
-            elif features.get("question_type") == "EXPLANATION":
-                intent = "EXPLANATION"
-            elif features.get("question_type") == "FACTUAL":
-                intent = "FACTUAL"
+        
+        
+        # Treat pure math/digit queries as NUMERIC even if classifier is uncertain
+        simple_math_pattern = all(ch.isdigit() or ch in "+-*/ ." for ch in query)
+        if (features.get("has_digits") and features.get("has_math_operators")) or simple_math_pattern:
+            intent, confidence = "NUMERIC", max(confidence, 0.9)
+        # Override prediction/fortune-telling queries to RULE engine (safe refusal)
+        
+        # If the user says "explain about <topic>" and it's factual (e.g., a language), keep it FACTUAL
+        elif query_lower.startswith("explain about") or (query_lower.startswith("explain") and " language" in query_lower):
+            intent = "FACTUAL"
+        # Otherwise generic explain/describe go to EXPLANATION
+        elif query_lower.startswith("explain") or query_lower.startswith("describe"):
+            intent = "EXPLANATION"
+        # Comparative/versus questions are conceptual; treat as EXPLANATION
+        elif " vs " in query_lower or " versus " in query_lower:
+            intent = "EXPLANATION"
+        # Override common factual phrasings to FACTUAL to avoid transformer on facts
+        elif query_lower.startswith(("capital of", "who is", "what is", "where is", "define ", "definition of", "tell me about")):
+            intent = "FACTUAL"
+        # Override "how many" queries asking for specific facts to FACTUAL not EXPLANATION
+        elif query_lower.startswith("how many") or query_lower.startswith("how much"):
+            intent = "FACTUAL"
+        elif features.get("question_type") == "EXPLANATION":
+            intent = "EXPLANATION"
+        elif features.get("question_type") == "FACTUAL":
+            intent = "FACTUAL"
         
         # Step 3: Route to engine
         engine_name, routing_reason = meta_controller.route(intent, confidence, features)
@@ -383,8 +394,8 @@ async def get_intents():
         "description": {
             "FACTUAL": "Factual queries - routed to RETRIEVAL engine",
             "NUMERIC": "Numerical computations - routed to ML engine",
-            "EXPLANATION": "Conceptual explanations - routed to TRANSFORMER engine",
-            "UNSAFE": "Unsafe/restricted queries - routed to RULE engine"
+            "EXPLANATION": "Conceptual explanations - routed to TRANSFORMER engine"
+            
         }
     }
 
