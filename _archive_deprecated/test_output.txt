@@ -1,0 +1,124 @@
+2026-02-28 19:31:38,485 - __main__ - INFO - ======================================================================
+2026-02-28 19:31:38,485 - __main__ - INFO - PHI2 EXPLANATION ENGINE - INTEGRATION TEST SUITE
+2026-02-28 19:31:38,485 - __main__ - INFO - ======================================================================
+2026-02-28 19:31:38,485 - __main__ - INFO - 
+ENGINE INITIALIZATION
+2026-02-28 19:31:38,485 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,446 - __main__ - INFO - Testing Phi2ExplanationEngine initialization...
+2026-02-28 19:31:41,446 - engines.phi2_explanation_engine - INFO - Phi2ExplanationEngine initialized (model not loaded yet)
+2026-02-28 19:31:41,446 - __main__ - INFO - \u2713 Engine initialization successful
+2026-02-28 19:31:41,446 - __main__ - INFO - 
+GROUNDING VALIDATION
+2026-02-28 19:31:41,446 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,446 - __main__ - INFO - Testing grounding validation...
+2026-02-28 19:31:41,447 - engines.phi2_explanation_engine - INFO - Phi2ExplanationEngine initialized (model not loaded yet)
+2026-02-28 19:31:41,447 - engines.phi2_explanation_engine - WARNING - Grounded data is empty
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Empty grounding correctly rejected
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Factual grounding accepted
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Numeric grounding accepted
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Code grounding accepted
+2026-02-28 19:31:41,447 - __main__ - INFO - \u2713 Grounding validation tests passed
+2026-02-28 19:31:41,447 - __main__ - INFO - 
+HALLUCINATION GUARD
+2026-02-28 19:31:41,447 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,447 - __main__ - INFO - Testing hallucination guard validator...
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Short text rejection works
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Long text rejection works
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Valid length text passes
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Validation tracking works
+2026-02-28 19:31:41,447 - __main__ - INFO - \u2713 Hallucination guard tests passed
+2026-02-28 19:31:41,447 - __main__ - INFO - 
+SAFE PROMPT GENERATION
+2026-02-28 19:31:41,447 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,447 - __main__ - INFO - Testing safe prompt generation...
+2026-02-28 19:31:41,447 - engines.phi2_explanation_engine - INFO - Phi2ExplanationEngine initialized (model not loaded yet)
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 System guard is included
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Grounding data is formatted
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Query is appended
+2026-02-28 19:31:41,447 - __main__ - INFO - \u2713 Safe prompt generation tests passed
+2026-02-28 19:31:41,447 - __main__ - INFO - 
+REFUSAL RESPONSE
+2026-02-28 19:31:41,447 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,447 - __main__ - INFO - Testing refusal response generation...
+2026-02-28 19:31:41,447 - engines.phi2_explanation_engine - INFO - Phi2ExplanationEngine initialized (model not loaded yet)
+2026-02-28 19:31:41,447 - engines.phi2_explanation_engine - WARNING - Grounded data is empty
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Refusal response format correct
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Status indicates refusal
+2026-02-28 19:31:41,447 - __main__ - INFO -   \u2713 Confidence is zero
+2026-02-28 19:31:41,447 - __main__ - INFO - \u2713 Refusal response tests passed
+2026-02-28 19:31:41,447 - __main__ - INFO - 
+INFERENCE COUNTER
+2026-02-28 19:31:41,447 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,447 - __main__ - INFO - Testing inference counter...
+2026-02-28 19:31:41,447 - engines.phi2_explanation_engine - INFO - Phi2ExplanationEngine initialized (model not loaded yet)
+2026-02-28 19:31:41,447 - engines.phi2_explanation_engine - WARNING - Grounded data is empty
+2026-02-28 19:31:41,448 - engines.phi2_explanation_engine - WARNING - Grounded data is empty
+2026-02-28 19:31:41,448 - engines.phi2_explanation_engine - WARNING - Grounded data is empty
+2026-02-28 19:31:41,448 - __main__ - INFO -   \u2713 Inference count incremented: 0 \u2192 3
+2026-02-28 19:31:41,448 - __main__ - INFO - \u2713 Inference counter tests passed
+2026-02-28 19:31:41,448 - __main__ - INFO - 
+STATISTICS TRACKING
+2026-02-28 19:31:41,448 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,448 - __main__ - INFO - Testing statistics tracking...
+2026-02-28 19:31:41,448 - engines.phi2_explanation_engine - INFO - Phi2ExplanationEngine initialized (model not loaded yet)
+2026-02-28 19:31:41,448 - __main__ - INFO -   \u2713 Statistics structure is correct
+2026-02-28 19:31:41,448 - __main__ - INFO -   \u2713 Initial stats: 0 inferences, 0% success
+2026-02-28 19:31:41,448 - __main__ - INFO - \u2713 Statistics tracking tests passed
+2026-02-28 19:31:41,448 - __main__ - INFO - 
+APP INTEGRATION
+2026-02-28 19:31:41,448 - __main__ - INFO - ----------------------------------------------------------------------
+2026-02-28 19:31:41,448 - __main__ - INFO - Testing app.py integration points...
+The `xla_device` argument has been deprecated in v4.4.0 of Transformers. It is ignored and you can safely remove it from your `config.json` file.
+The `xla_device` argument has been deprecated in v4.4.0 of Transformers. It is ignored and you can safely remove it from your `config.json` file.
+The `xla_device` argument has been deprecated in v4.4.0 of Transformers. It is ignored and you can safely remove it from your `config.json` file.
+The `xla_device` argument has been deprecated in v4.4.0 of Transformers. It is ignored and you can safely remove it from your `config.json` file.
+The `xla_device` argument has been deprecated in v4.4.0 of Transformers. It is ignored and you can safely remove it from your `config.json` file.
+Device set to use cpu
+2026-02-28 19:31:42,298 - __main__ - ERROR - \u2717 Test failed with error: 'charmap' codec can't encode character '\u2717' in position 0: character maps to <undefined>
+Traceback (most recent call last):
+  File "C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\core\intent_classifier.py", line 66, in load_model
+    print(f"\u2713 Intent classifier loaded ({self.model_name})")
+  File "C:\Users\TANMAY\AppData\Local\Programs\Python\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 0: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\test_phi2_integration.py", line 265, in run_all_tests
+    success = test_func()
+              ^^^^^^^^^^^
+  File "C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\test_phi2_integration.py", line 223, in test_app_integration
+    from app import phi2_explanation_engine
+  File "C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\app.py", line 51, in <module>
+    intent_classifier = IntentClassifier()
+                        ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\core\intent_classifier.py", line 51, in __init__
+    self.load_model()
+  File "C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\core\intent_classifier.py", line 69, in load_model
+    print(f"\u2717 Failed to load intent classifier: {e}")
+  File "C:\Users\TANMAY\AppData\Local\Programs\Python\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2717' in position 0: character maps to <undefined>
+2026-02-28 19:31:42,307 - __main__ - INFO - 
+======================================================================
+2026-02-28 19:31:42,307 - __main__ - INFO - TEST SUMMARY
+2026-02-28 19:31:42,307 - __main__ - INFO - ======================================================================
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2713 PASS: Engine Initialization
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2713 PASS: Grounding Validation
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2713 PASS: Hallucination Guard
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2713 PASS: Safe Prompt Generation
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2713 PASS: Refusal Response
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2713 PASS: Inference Counter
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2713 PASS: Statistics Tracking
+2026-02-28 19:31:42,307 - __main__ - INFO - \u2717 FAIL: App Integration
+2026-02-28 19:31:42,307 - __main__ - INFO - ======================================================================
+2026-02-28 19:31:42,307 - __main__ - INFO - Results: 7/8 tests passed
+2026-02-28 19:31:42,307 - __main__ - ERROR - \u274c 1 tests failed
+
+
+Loading intent classifier: typeform/distilbert-base-uncased-mnli...
+
+

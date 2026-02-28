@@ -1,0 +1,326 @@
+query,domain
+What is the minimum attendance requirement?,STUDENT
+How do I calculate my CGPA?,STUDENT
+What are the library hours?,STUDENT
+When is the next semester exam?,STUDENT
+What is machine learning?,STUDENT
+Explain artificial intelligence,STUDENT
+How does a neural network work?,STUDENT
+What is Python programming?,STUDENT
+What is the grading system?,STUDENT
+Who is the dean of our college?,STUDENT
+What are the hostel rules?,STUDENT
+How to apply for scholarship?,STUDENT
+What is the syllabus for Data Structures?,STUDENT
+When is the placement drive?,STUDENT
+What is the campus wifi password?,STUDENT
+How do I register for courses?,STUDENT
+What is the attendance policy?,STUDENT
+Explain object-oriented programming,STUDENT
+What is the difference between AI and ML?,STUDENT
+How do transformers work in NLP?,STUDENT
+What is deep learning?,STUDENT
+Explain supervised learning,STUDENT
+What is a data structure?,STUDENT
+How does binary search work?,STUDENT
+What is time complexity?,STUDENT
+Explain Big O notation,STUDENT
+What is a linked list?,STUDENT
+How does merge sort work?,STUDENT
+What is dynamic programming?,STUDENT
+Explain recursion with an example,STUDENT
+What is a database?,STUDENT
+What is SQL?,STUDENT
+Explain normalization in databases,STUDENT
+What is a primary key?,STUDENT
+How does a hash table work?,STUDENT
+What is cloud computing?,STUDENT
+Explain microservices architecture,STUDENT
+What is REST API?,STUDENT
+How does HTTP work?,STUDENT
+What is Git version control?,STUDENT
+Explain the OSI model,STUDENT
+What is TCP/IP?,STUDENT
+How does DNS work?,STUDENT
+What is computer networking?,STUDENT
+Explain linear regression,STUDENT
+What is gradient descent?,STUDENT
+How does backpropagation work?,STUDENT
+What is overfitting in ML?,STUDENT
+Explain cross-validation,STUDENT
+What is precision and recall?,STUDENT
+How to calculate GPA?,STUDENT
+What is the credit system?,STUDENT
+When is the assignment deadline?,STUDENT
+How to access online lectures?,STUDENT
+What is the lab schedule?,STUDENT
+How to join coding club?,STUDENT
+What programming languages should I learn?,STUDENT
+How to prepare for technical interviews?,STUDENT
+What is DevOps?,STUDENT
+Explain agile methodology,STUDENT
+What is software testing?,STUDENT
+How does encryption work?,STUDENT
+What is cybersecurity?,STUDENT
+Explain blockchain technology,STUDENT
+What is blockchain and cryptocurrency?,STUDENT
+How does bitcoin work?,STUDENT
+What is quantum computing?,STUDENT
+Explain theory of computation,STUDENT
+What is a Turing machine?,STUDENT
+How to solve NP-complete problems?,STUDENT
+What is computational complexity?,STUDENT
+Explain graph algorithms,STUDENT
+What is Dijkstra's algorithm?,STUDENT
+How does BFS work?,STUDENT
+What is A* search algorithm?,STUDENT
+Explain dynamic programming examples,STUDENT
+What is memoization?,STUDENT
+How to optimize algorithms?,STUDENT
+What is multithreading?,STUDENT
+Explain concurrency in programming,STUDENT
+What is a mutex?,STUDENT
+How does deadlock occur?,STUDENT
+What is operating system?,STUDENT
+Explain process scheduling,STUDENT
+What is virtual memory?,STUDENT
+How does pagination work?,STUDENT
+What is compiler design?,STUDENT
+Explain lexical analysis,STUDENT
+What is parsing?,STUDENT
+How does syntax analysis work?,STUDENT
+What is computer graphics?,STUDENT
+Explain rendering techniques,STUDENT
+What is OpenGL?,STUDENT
+How does 3D modeling work?,STUDENT
+What is computer vision?,STUDENT
+Explain image processing,STUDENT
+How does edge detection work?,STUDENT
+What is natural language processing?,STUDENT
+Explain tokenization in NLP,STUDENT
+What is sentiment analysis?,STUDENT
+How does named entity recognition work?,STUDENT
+What is reinforcement learning?,STUDENT
+Explain Q-learning algorithm,STUDENT
+What is transfer learning?,STUDENT
+How to fine-tune pretrained models?,STUDENT
+What is GANs?,STUDENT
+Explain convolutional neural networks,STUDENT
+What is RNN and LSTM?,STUDENT
+How does attention mechanism work?,STUDENT
+What are transformers in NLP?,STUDENT
+Explain BERT model,STUDENT
+What is GPT architecture?,STUDENT
+How does word embedding work?,STUDENT
+What is Word2Vec?,STUDENT
+Explain cosine similarity,STUDENT
+What is TF-IDF?,STUDENT
+How to build a chatbot?,STUDENT
+What is information retrieval?,STUDENT
+Explain search algorithms,STUDENT
+What is PageRank algorithm?,STUDENT
+How does recommendation system work?,STUDENT
+What is collaborative filtering?,STUDENT
+Explain matrix factorization,STUDENT
+What is data mining?,STUDENT
+How to perform clustering?,STUDENT
+What is K-means algorithm?,STUDENT
+Explain decision trees,STUDENT
+What is random forest?,STUDENT
+How does SVM work?,STUDENT
+What is Naive Bayes classifier?,STUDENT
+Explain ensemble learning,STUDENT
+What is boosting and bagging?,STUDENT
+How does AdaBoost work?,STUDENT
+What is gradient boosting?,STUDENT
+Explain XGBoost algorithm,STUDENT
+What is feature engineering?,STUDENT
+How to handle missing data?,STUDENT
+What is data preprocessing?,STUDENT
+Explain dimensionality reduction,STUDENT
+What is PCA?,STUDENT
+How does t-SNE work?,STUDENT
+What is linear algebra?,STUDENT
+Explain matrix multiplication,STUDENT
+What is eigenvector?,STUDENT
+How to solve differential equations?,STUDENT
+What is calculus?,STUDENT
+Explain derivatives and integrals,STUDENT
+What is probability theory?,STUDENT
+How to calculate expected value?,STUDENT
+What is Bayes theorem?,STUDENT
+Explain discrete mathematics,STUDENT
+What is set theory?,STUDENT
+How to prove by induction?,STUDENT
+What is graph theory?,STUDENT
+Explain network flow algorithms,STUDENT
+What is minimum spanning tree?,STUDENT
+How does Prim's algorithm work?,STUDENT
+What is Kruskal's algorithm?,STUDENT
+Explain topological sorting,STUDENT
+What is strongly connected components?,STUDENT
+How to detect cycles in graphs?,STUDENT
+What is bipartite matching?,STUDENT
+What movies are playing today?,OUTSIDE
+Who won the cricket match?,OUTSIDE
+Which team is winning IPL?,OUTSIDE
+What is the weather forecast?,OUTSIDE
+Tell me about Shahrukh Khan,OUTSIDE
+Who is the current Prime Minister?,OUTSIDE
+What happened in the election?,OUTSIDE
+Which party won the election?,OUTSIDE
+Tell me a recipe for biryani,OUTSIDE
+What is the stock price of Apple?,OUTSIDE
+How to invest in stocks?,OUTSIDE
+What is the latest Bollywood gossip?,OUTSIDE
+Who is dating whom in Hollywood?,OUTSIDE
+What is the box office collection?,OUTSIDE
+Tell me about the new movie,OUTSIDE
+What is the latest web series?,OUTSIDE
+Who won the Oscar?,OUTSIDE
+What is the football score?,OUTSIDE
+Who won the FIFA World Cup?,OUTSIDE
+Tell me about Virat Kohli,OUTSIDE
+What is Messi's salary?,OUTSIDE
+Which is the best restaurant nearby?,OUTSIDE
+What is the flight ticket price?,OUTSIDE
+How to book a hotel?,OUTSIDE
+What is the traffic condition?,OUTSIDE
+Tell me a joke,OUTSIDE
+What is my horoscope?,OUTSIDE
+Predict my future,OUTSIDE
+Will I get married?,OUTSIDE
+What is my lucky number?,OUTSIDE
+Tell me about yesterday's cricket match,OUTSIDE
+Who is the president of USA?,OUTSIDE
+What is the capital of France?,OUTSIDE
+Who invented the telephone?,OUTSIDE
+What is the tallest mountain?,OUTSIDE
+Who is the richest person?,OUTSIDE
+What is the population of India?,OUTSIDE
+What is the currency of Japan?,OUTSIDE
+Who is the CEO of Google?,OUTSIDE
+What is the speed of light?,OUTSIDE
+How to cook pasta?,OUTSIDE
+What is the recipe for pizza?,OUTSIDE
+Tell me about restaurants in Mumbai,OUTSIDE
+What is the weather in Delhi?,OUTSIDE
+Is it going to rain tomorrow?,OUTSIDE
+What is the temperature today?,OUTSIDE
+Tell me latest news,OUTSIDE
+What happened in politics today?,OUTSIDE
+Who is the sports minister?,OUTSIDE
+What is the latest COVID update?,OUTSIDE
+Tell me about the pandemic,OUTSIDE
+What is the vaccination status?,OUTSIDE
+How to cure fever?,OUTSIDE
+What are symptoms of flu?,OUTSIDE
+Tell me about medical treatment,OUTSIDE
+How to lose weight?,OUTSIDE
+What is the best diet plan?,OUTSIDE
+Tell me workout routine,OUTSIDE
+How to build muscle?,OUTSIDE
+What is yoga?,OUTSIDE
+Tell me meditation techniques,OUTSIDE
+What is the best phone to buy?,OUTSIDE
+Should I buy iPhone or Android?,OUTSIDE
+What is the price of laptop?,OUTSIDE
+Tell me about new gadgets,OUTSIDE
+What is the best car?,OUTSIDE
+How much does Tesla cost?,OUTSIDE
+Tell me about electric vehicles,OUTSIDE
+What is the petrol price?,OUTSIDE
+How to plan a vacation?,OUTSIDE
+Where should I travel?,OUTSIDE
+What are tourist places in Kerala?,OUTSIDE
+Tell me about Paris tourism,OUTSIDE
+How to get a visa?,OUTSIDE
+What is the passport renewal process?,OUTSIDE
+Tell me about immigration,OUTSIDE
+How to apply for green card?,OUTSIDE
+What is the lottery result?,OUTSIDE
+Who won the lottery?,OUTSIDE
+What is my bank balance?,OUTSIDE
+How to apply for loan?,OUTSIDE
+What is the interest rate?,OUTSIDE
+Tell me about insurance,OUTSIDE
+What is life insurance?,OUTSIDE
+How to file tax return?,OUTSIDE
+What is GST?,OUTSIDE
+Tell me about legal matters,OUTSIDE
+What is the latest movie release?,OUTSIDE
+Tell me about the new album,OUTSIDE
+Who is the best singer?,OUTSIDE
+What is the concert date?,OUTSIDE
+Tell me about music festivals,OUTSIDE
+What is the latest fashion trend?,OUTSIDE
+Tell me about makeup tutorial,OUTSIDE
+How to style hair?,OUTSIDE
+What is the latest smartphone?,OUTSIDE
+Tell me about gaming consoles,OUTSIDE
+What is the best video game?,OUTSIDE
+How to download movies?,OUTSIDE
+Tell me about Netflix shows,OUTSIDE
+What is trending on YouTube?,OUTSIDE
+Tell me about viral videos,OUTSIDE
+What is the meme of the day?,OUTSIDE
+Tell me about social media trends,OUTSIDE
+What is happening on Twitter?,OUTSIDE
+Tell me about Instagram influencers,OUTSIDE
+What is TikTok?,OUTSIDE
+Tell me about WhatsApp updates,OUTSIDE
+How to hack a password?,OUTSIDE
+Tell me how to cheat in exam,OUTSIDE
+What is the lottery number?,OUTSIDE
+Predict stock market tomorrow,OUTSIDE
+Will I win the match?,OUTSIDE
+What is my fortune?,OUTSIDE
+Tell me about astrology,OUTSIDE
+What is my zodiac sign compatibility?,OUTSIDE
+Predict election results,OUTSIDE
+Who will win the election?,OUTSIDE
+Tell me about political scandals,OUTSIDE
+What is the corruption case?,OUTSIDE
+Tell me about celebrity divorce,OUTSIDE
+Who is pregnant in Bollywood?,OUTSIDE
+What is the dating rumor?,OUTSIDE
+Tell me about breakup news,OUTSIDE
+What is SRKR Engineering College?,STUDENT
+What is SRKR?,STUDENT
+Tell me about SRKR Engineering College,STUDENT
+What is the medium of instruction at SRKR?,STUDENT
+How many credits are required for B.Tech degree?,STUDENT
+What is the duration of B.Tech programme?,STUDENT
+What are the attendance requirements at SRKR?,STUDENT
+What is the minimum attendance required?,STUDENT
+Can attendance shortage be condoned?,STUDENT
+What is the grading system at SRKR?,STUDENT
+How are theory courses evaluated?,STUDENT
+How is internal evaluation calculated?,STUDENT
+What are the minimum pass marks?,STUDENT
+What are the promotion rules?,STUDENT
+What is the credit transfer policy?,STUDENT
+What are the MOOC requirements?,STUDENT
+What are summer internship requirements?,STUDENT
+What is the final year project requirement?,STUDENT
+What is the revaluation policy?,STUDENT
+What are the malpractice consequences?,STUDENT
+How many electives can I choose?,STUDENT
+What is the student induction programme?,STUDENT
+What are mandatory non-credit courses?,STUDENT
+What are skill enhancement courses?,STUDENT
+How many additional credits for Honors?,STUDENT
+What is the admission policy for B.Tech?,STUDENT
+What is the definition of one credit?,STUDENT
+What is the semester structure?,STUDENT
+What is the programme structure at SRKR?,STUDENT
+What are R23 regulations?,STUDENT
+Tell me about B.Tech regulations,STUDENT
+What is JNTUK affiliation?,STUDENT
+What is NAAC accreditation?,STUDENT
+What is AICTE approval?,STUDENT
+What percentage is needed to pass?,STUDENT
+How is CGPA calculated at SRKR?,STUDENT
+What is the maximum duration to complete B.Tech?,STUDENT
+Can I take a gap year?,STUDENT
+What is practical course evaluation?,STUDENT

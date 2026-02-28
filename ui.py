@@ -656,6 +656,48 @@ def render_message(msg, msg_type="user"):
             reason = msg.get('reason', '')
             strategy_emoji = get_strategy_emoji(strategy)
             
+            metadata = msg.get('metadata', {})
+            active_intents = metadata.get('active_intents', [])
+            engine_chain = metadata.get('engine_chain', [])
+            intent_scores = metadata.get('intent_scores', {})
+            classification_method = metadata.get('classification_method', '')
+            classification_time_ms = metadata.get('classification_time_ms')
+            source = metadata.get('source') or msg.get('source', '')
+
+            # Format active intents and engine chain strings
+            intents_str = ", ".join(active_intents) if active_intents else strategy
+            chain_str = " → ".join(engine_chain) if engine_chain else strategy
+
+            # Build intent scores breakdown HTML
+            score_bars_html = ""
+            if intent_scores:
+                score_bars_html = '<div style="margin-top: 0.8rem;"><div style="font-size: 0.8rem; color: #8B949E; margin-bottom: 0.4rem;"><strong>Intent Scores:</strong></div>'
+                intent_colors = {"FACTUAL": "#58A6FF", "NUMERIC": "#3FB950", "EXPLANATION": "#D2A8FF", "UNSAFE": "#F85149"}
+                for intent_name, score in sorted(intent_scores.items(), key=lambda x: -x[1]):
+                    bar_color = intent_colors.get(intent_name, "#8B949E")
+                    bar_width = max(int(score * 300), 3)  # Scale for visibility
+                    active_marker = " ✓" if intent_name in active_intents else ""
+                    score_bars_html += f'''
+                    <div style="display:flex; align-items:center; margin-top:0.25rem; gap:0.5rem;">
+                        <span style="width:100px; font-size:0.75rem; color:{bar_color};">{intent_name}{active_marker}</span>
+                        <div style="flex:1; background:#21262D; height:6px; border-radius:3px; overflow:hidden;">
+                            <div style="background:{bar_color}; width:{bar_width}%; height:100%;"></div>
+                        </div>
+                        <span style="font-size:0.75rem; width:40px; text-align:right; color:#C9D1D9;">{score:.2f}</span>
+                    </div>'''
+                score_bars_html += '</div>'
+
+            # Build classifier info
+            method_html = ""
+            if classification_method:
+                time_str = f" ({round(classification_time_ms)} ms)" if classification_time_ms else ""
+                method_html = f'<div style="color:#8B949E; font-size:0.75rem; margin-top:0.5rem;">Classifier: {classification_method}{time_str}</div>'
+            
+            # Build source info
+            source_html = ""
+            if source and source != "Unknown":
+                source_html = f'<div style="color:#8B949E; font-size:0.75rem; margin-top:0.3rem;">Source: {source}</div>'
+            
             st.markdown(f"""
                 <div class="message-container ai-message">
                     <div class="message-header">
@@ -664,26 +706,31 @@ def render_message(msg, msg_type="user"):
                     </div>
                     <div class="message-content">
                         <div class="strategy-badge">{strategy_emoji} {strategy}</div>
-                        <div>{answer}</div>
+                        <div style="margin: 0.8rem 0; line-height: 1.6;">{answer}</div>
                         <div class="metadata-box">
-                            <div style="font-weight: 500; margin-bottom: 0.5rem;">Details</div>
-                            <div style="color: #8B949E;">Confidence: {confidence:.1%}</div>
+                            <div style="font-weight: 600; margin-bottom: 0.6rem; color: #C9D1D9;">Orchestration Details</div>
+                            <div style="color: #8B949E; margin-bottom: 0.3rem;"><strong>Intents:</strong> {intents_str}</div>
+                            <div style="color: #8B949E; margin-bottom: 0.3rem;"><strong>Execution Chain:</strong> {chain_str}</div>
+                            <div style="color: #8B949E; margin-bottom: 0.3rem;"><strong>Confidence:</strong> {confidence:.1%}</div>
                             <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: {confidence * 100}%"></div>
+                                <div class="confidence-fill" style="width: {min(confidence * 100, 100)}%"></div>
                             </div>
-                            {f'<div style="color: #8B949E; font-size: 0.8rem; margin-top: 0.5rem;">{reason}</div>' if reason else ''}
+                            {score_bars_html}
+                            {method_html}
+                            {source_html}
                         </div>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
         else:
+            # Handle string messages (errors, simple responses)
             st.markdown(f"""
                 <div class="message-container ai-message">
                     <div class="message-header">
                         <div class="ai-avatar">🧠</div>
                         Meta-Learning AI
                     </div>
-                    <div class="message-content">{msg}</div>
+                    <div class="message-content" style="line-height: 1.6;">{msg}</div>
                 </div>
             """, unsafe_allow_html=True)
 

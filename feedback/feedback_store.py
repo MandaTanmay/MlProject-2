@@ -62,6 +62,20 @@ class FeedbackStore:
             )
         """)
         
+        # Create routing log table (for Phase 7)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS routing_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                query TEXT NOT NULL,
+                active_intents TEXT NOT NULL,
+                primary_intent TEXT NOT NULL,
+                engine_chain TEXT NOT NULL,
+                status TEXT NOT NULL,
+                is_unsafe INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        
         conn.commit()
         conn.close()
         print(f"✓ Feedback database initialized at {self.db_path}")
@@ -116,6 +130,38 @@ class FeedbackStore:
             
         except Exception as e:
             print(f"✗ Failed to store feedback: {e}")
+            return False
+
+    def store_routing_log(self, query: str, active_intents: List[str],
+                          primary_intent: str, engine_chain: List[str],
+                          status: str, is_unsafe: bool) -> bool:
+        """
+        Store routing decisions and unsafe attempts.
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO routing_logs (
+                    timestamp, query, active_intents, primary_intent,
+                    engine_chain, status, is_unsafe
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().isoformat(),
+                query,
+                json.dumps(active_intents),
+                primary_intent,
+                json.dumps(engine_chain),
+                status,
+                1 if is_unsafe else 0
+            ))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"✗ Failed to store routing log: {e}")
             return False
     
     def get_feedback_stats(self) -> Dict[str, Any]:

@@ -12,6 +12,9 @@ joblib==1.4.2
 pandas==2.2.3
 numpy==2.2.1
 
+# Semantic Safety Detection (Rule Engine)
+sentence-transformers==3.0.1
+
 # Transformer Engine (Optional - for explanations only)
 transformers==4.47.1
 torch==2.5.1

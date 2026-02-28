@@ -1,0 +1,37 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-8.3.4, pluggy-1.6.0 -- C:\Users\TANMAY\AppData\Local\Programs\Python\Python311\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai
+plugins: anyio-3.7.1, asyncio-0.25.2
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 19 items
+
+tests/test_system.py::TestInputAnalyzer::test_basic_analysis PASSED      [  5%]
+tests/test_system.py::TestInputAnalyzer::test_numeric_detection PASSED   [ 10%]
+tests/test_system.py::TestInputAnalyzer::test_unsafe_detection PASSED    [ 15%]
+tests/test_system.py::TestIntentClassifier::test_factual_classification PASSED [ 21%]
+tests/test_system.py::TestIntentClassifier::test_numeric_classification PASSED [ 26%]
+tests/test_system.py::TestIntentClassifier::test_explanation_classification PASSED [ 31%]
+tests/test_system.py::TestIntentClassifier::test_unsafe_classification PASSED [ 36%]
+tests/test_system.py::TestMetaController::test_factual_routing PASSED    [ 42%]
+tests/test_system.py::TestMetaController::test_numeric_routing PASSED    [ 47%]
+tests/test_system.py::TestMetaController::test_explanation_routing FAILED [ 52%]
+tests/test_system.py::TestMetaController::test_unsafe_routing FAILED     [ 57%]
+tests/test_system.py::TestRuleEngine::test_unsafe_blocking PASSED        [ 63%]
+tests/test_system.py::TestRuleEngine::test_safe_query PASSED             [ 68%]
+tests/test_system.py::TestMLEngine::test_addition PASSED                 [ 73%]
+tests/test_system.py::TestMLEngine::test_multiplication PASSED           [ 78%]
+tests/test_system.py::TestMLEngine::test_division PASSED                 [ 84%]
+tests/test_system.py::TestEndToEnd::test_factual_query_flow FAILED       [ 89%]
+tests/test_system.py::TestEndToEnd::test_numeric_query_flow PASSED       [ 94%]
+tests/test_system.py::TestEndToEnd::test_unsafe_query_flow PASSED        [100%]
+
+================================== FAILURES ===================================
+C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\tests\test_system.py:102: AssertionError: assert 'ML_ENGINE' in ['TRANSFORMER', 'EXPLANATION', 'RETRIEVAL', 'FACTUAL']
+C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\tests\test_system.py:110: AssertionError: assert 'RULE_ENGINE' in ['RULE', 'UNSAFE', 'RETRIEVAL']
+C:\Users\TANMAY\OneDrive\Desktop\MetaAI\meta_learning_ai\tests\test_system.py:169: AssertionError: assert 'RULE_ENGINE' in ['RETRIEVAL', 'FACTUAL', 'ML_ENGINE', 'TRANSFORMER']
+=========================== short test summary info ===========================
+FAILED tests/test_system.py::TestMetaController::test_explanation_routing - A...
+FAILED tests/test_system.py::TestMetaController::test_unsafe_routing - Assert...
+FAILED tests/test_system.py::TestEndToEnd::test_factual_query_flow - Assertio...
+=================== 3 failed, 16 passed in 62.75s (0:01:02) ===================

@@ -12,18 +12,22 @@ import json
 import sqlite3
 from pathlib import Path
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Import core components
+from core.domain_classifier import DomainClassifier
 from core.input_analyzer import InputAnalyzer
-from core.intent_classifier import IntentClassifier
 from core.meta_controller import MetaController
 from core.output_validator import OutputValidator
 
 # Import engines
 from engines.rule_engine import RuleEngine
-from engines.retrieval_engine import RetrievalEngine
+from engines.retrieval_engine import FactualEngine
 from engines.ml_engine import MLEngine
 from engines.transformer_engine import TransformerEngine
+from engines.phi2_explanation_engine import Phi2ExplanationEngine
 
 # Import feedback
 from feedback.feedback_store import FeedbackStore
@@ -46,22 +50,34 @@ app.add_middleware(
 )
 
 # Initialize components
+domain_classifier = DomainClassifier()
 input_analyzer = InputAnalyzer()
-intent_classifier = IntentClassifier()
 meta_controller = MetaController()
 output_validator = OutputValidator()
 
 # Initialize engines
 rule_engine = RuleEngine()
-retrieval_engine = RetrievalEngine()
+retrieval_engine = FactualEngine()
 ml_engine = MLEngine()
 transformer_engine = TransformerEngine()
+phi2_explanation_engine = Phi2ExplanationEngine(use_quantization=True, device="auto")
 
 # Initialize feedback store
 feedback_store = FeedbackStore()
 
 # Query cache for feedback context (query -> {intent, confidence})
 query_context_cache = {}
+
+
+# Startup event - load Phi-2 model
+@app.on_event("startup")
+async def startup_load_phi2():
+    """Load Phi-2 model at startup for explanation engine."""
+    logger.info("Loading Phi-2 explanation engine on startup...")
+    if phi2_explanation_engine.load():
+        logger.info("✓ Phi-2 model loaded successfully")
+    else:
+        logger.warning("⚠ Phi-2 model failed to load - explanations will use fallback")
 
 
 # Request/Response models
@@ -144,13 +160,13 @@ async def health_check():
         "status": "healthy",
         "components": {
             "input_analyzer": "operational",
-            "intent_classifier": "loaded" if intent_classifier.is_loaded else "fallback mode",
             "meta_controller": "operational",
             "output_validator": "operational",
             "rule_engine": "operational",
             "retrieval_engine": "operational",
             "ml_engine": "operational",
-            "transformer_engine": "loaded" if transformer_engine.is_loaded else "fallback mode"
+            "transformer_engine": "loaded" if transformer_engine.is_loaded else "fallback mode",
+            "phi2_explanation_engine": "loaded" if phi2_explanation_engine.is_loaded else "fallback mode"
         }
     }
 
@@ -160,13 +176,18 @@ async def health_full():
     """Detailed health including model names and load states."""
     return {
         "status": "healthy",
-        "intent_classifier": {
-            "loaded": intent_classifier.is_loaded,
-            "model": getattr(intent_classifier, "model_name", "unknown")
+        "domain_classifier": {
+            "loaded": domain_classifier.is_loaded,
+            "model": "TF-IDF + Logistic Regression" if domain_classifier.is_loaded else "fallback"
         },
         "transformer_engine": {
             "loaded": transformer_engine.is_loaded,
             "model": getattr(transformer_engine, "model_name", "unknown")
+        },
+        "phi2_explanation_engine": {
+            "loaded": phi2_explanation_engine.is_loaded,
+            "model": phi2_explanation_engine.model_name,
+            "quantization": phi2_explanation_engine.use_quantization
         },
         "components": {
             "input_analyzer": "operational",
@@ -189,7 +210,23 @@ async def process_query(request: QueryRequest):
             raise HTTPException(status_code=400, detail="Query cannot be empty")
 
         # ------------------------------------------------
-        # STEP 1: HARD SAFETY CHECK (Before Everything)
+        # STEP 1: Domain Classification
+        # ------------------------------------------------
+        domain, dom_conf = domain_classifier.predict(query)
+        if domain == "OUTSIDE":
+            return QueryResponse(
+                answer=domain_classifier.get_refusal_message(),
+                strategy="DOMAIN_FILTER",
+                confidence=dom_conf,
+                reason="Query is not related to the academic student domain.",
+                metadata={
+                    "domain": domain,
+                    "domain_confidence": dom_conf
+                }
+            )
+
+        # ------------------------------------------------
+        # STEP 2: HARD SAFETY CHECK (Before Everything)
         # ------------------------------------------------
         from core.safety import is_harmful_input
 
@@ -206,82 +243,135 @@ async def process_query(request: QueryRequest):
             )
 
         # ------------------------------------------------
-        # STEP 2: Feature Extraction
+        # STEP 3: Feature Extraction
         # ------------------------------------------------
         features = input_analyzer.analyze(query)
 
         # ------------------------------------------------
-        # STEP 3: ML Intent Classification
+        # STEP 4: Multi-Label Intent Orchestration
         # ------------------------------------------------
-        intent, confidence = intent_classifier.predict(query)
-
-        query_lower = query.lower()
-
-        # ------------------------------------------------
-        # STEP 4: Deterministic Overrides
-        # ------------------------------------------------
-
-        # Unsafe keyword override
-        if features.get("has_unsafe_keywords"):
-            intent, confidence = "UNSAFE", 1.0
-
-        else:
-
-            # 🔥 Strong numeric override (natural language math)
-            math_words = [
-                "add", "plus", "subtract", "minus",
-                "multiply", "multiplied", "divide", "divided",
-                "times", "average", "sum"
-            ]
-
-            if any(word in query_lower for word in math_words) and any(char.isdigit() for char in query):
-                intent, confidence = "NUMERIC", 1.0
-
-            # Pure operator-based math
-            elif (features.get("has_digits") and features.get("has_math_operators")):
-                intent, confidence = "NUMERIC", max(confidence, 0.9)
-
-            # Simple numeric-only queries
-            elif all(ch.isdigit() or ch in "+-*/. " for ch in query):
-                intent, confidence = "NUMERIC", 1.0
-
-            # Explanation overrides
-            elif query_lower.startswith("explain") or query_lower.startswith("describe"):
-                intent = "EXPLANATION"
-
-            # Comparative conceptual queries
-            elif " vs " in query_lower or " versus " in query_lower:
-                intent = "EXPLANATION"
-
-            # Factual phrasing overrides
-            elif query_lower.startswith(("what is", "who is", "define", "where is", "how many", "how much")):
-                intent = "FACTUAL"
+        # Uses semantic similarity to determine active intents and execution chain
+        orchestration_plan = meta_controller.orchestrate(query, features)
+        
+        # Store routing decision in database (Phase 7)
+        is_blocked = orchestration_plan.get("status") == "blocked"
+        feedback_store.store_routing_log(
+            query=query,
+            active_intents=orchestration_plan["intents"]["active_intents"],
+            primary_intent=orchestration_plan["intents"]["primary_intent"],
+            engine_chain=orchestration_plan["execution_plan"]["engine_chain"],
+            status=orchestration_plan.get("status", "ready"),
+            is_unsafe=is_blocked
+        )
+        
+        if is_blocked:
+            return QueryResponse(
+                answer="I'm not able to assist with harmful or dangerous requests.",
+                strategy="SAFETY",
+                confidence=1.0,
+                reason="Blocked by safety layer.",
+                metadata=orchestration_plan.get("metadata", {})
+            )
+        
+        execution_plan = orchestration_plan["execution_plan"]
+        engines_to_execute = execution_plan["engine_chain"]
+        routing_reason = execution_plan["chain_reasoning"]
+        
+        intent = orchestration_plan["intents"]["primary_intent"]
+        confidence = orchestration_plan["intents"]["primary_confidence"]
+        decomposition = orchestration_plan.get("decomposition", {})
 
         # ------------------------------------------------
-        # STEP 5: Route to Engine
+        # STEP 5: Execute Engine(s)
         # ------------------------------------------------
-        engine_name, routing_reason = meta_controller.route(intent, confidence, features)
+        result = None
+        grounded_data = {}  # Accumulate grounding for explanation engine
+        
+        for current_engine in engines_to_execute:
+            if current_engine == "RULE" or current_engine == "RULE_ENGINE":
+                result = rule_engine.execute(query, features)
+            
+            elif current_engine == "RETRIEVAL" or current_engine == "RETRIEVAL_ENGINE":
+                if decomposition.get("factual_entity"):
+                    # Use entity from decomposition if available
+                    result = retrieval_engine.execute(decomposition["factual_entity"], features)
+                else:
+                    result = retrieval_engine.execute(query, features)
+                
+                # Extract answer - handle both flat and nested response formats
+                factual_answer = result.get("answer") or result.get("data", {}).get("answer", "")
+                grounded_data["factual_result"] = factual_answer
+                
+                # Normalize result to have answer at root level for downstream processing
+                if result.get("status") == "success":
+                    if not result.get("answer") and result.get("data", {}).get("answer"):
+                        result["answer"] = result["data"]["answer"]
+                    result["strategy"] = "RETRIEVAL"
+                    result["confidence"] = result.get("confidence", 0.0)
+                    result["reason"] = f"Retrieved from knowledge base (confidence: {result['confidence']:.2%})"
+                else:
+                    # Handle uncertain/error/ambiguous responses
+                    status = result.get("status", "unknown")
+                    reason = result.get("data", {}).get("reason") or result.get("metadata", {}).get("reason") or "No confident match found"
+                    result["answer"] = f"I could not find a confident answer. Reason: {reason}"
+                    result["strategy"] = "RETRIEVAL"
+                    result["confidence"] = result.get("confidence", 0.0)
+                    result["reason"] = f"Retrieval status: {status}"
+                
+                # The Retrieval Engine sometimes sets source inside data/metadata, not root.
+                if isinstance(result.get("data"), dict):
+                    grounded_data["source"] = result["data"].get("source", result.get("source", "Unknown"))
+                    result["source"] = grounded_data["source"]
+                else:
+                    grounded_data["source"] = result.get("source", "Unknown")
+            
+            elif current_engine == "ML" or current_engine == "ML_ENGINE":
+                if decomposition.get("computation_type") == "percentage" and grounded_data.get("factual_result"):
+                    import re
+                    pct = decomposition["percentage"]
+                    factual_nums = re.findall(r'-?\d+\.?\d*', str(grounded_data["factual_result"]))
+                    if factual_nums:
+                        base_val = float(factual_nums[0])
+                        ans = (pct / 100.0) * base_val
+                        result = {
+                            "answer": f"The answer is {ans}",
+                            "confidence": 1.0,
+                            "strategy": "ML",
+                            "computation_type": "percentage",
+                            "reason": f"Computed {pct}% of {base_val}"
+                        }
+                    else:
+                        result = ml_engine.execute(query, features)
+                else:
+                    result = ml_engine.execute(query, features)
+                # Store numeric result for grounding explanation
+                grounded_data["numeric_result"] = result.get("answer")
+                grounded_data["computation_type"] = result.get("computation_type")
+            
+            elif current_engine == "TRANSFORMER" or current_engine == "TRANSFORMER_ENGINE":
+                # Use Phi2ExplanationEngine if available and grounded data is present
+                if phi2_explanation_engine.is_loaded and grounded_data:
+                    logger.info(f"Using Phi2ExplanationEngine with grounded data: {list(grounded_data.keys())}")
+                    result = phi2_explanation_engine.execute(query, grounded_data)
+                    # Convert phi2 response format to match app expectations
+                    if result.get("status") == "success":
+                        result["answer"] = result.get("explanation")
+                        result["strategy"] = "EXPLANATION"
+                        result["confidence"] = result.get("confidence", 0.9)
+                        result["reason"] = "Generated using grounded Phi-2 explanation engine"
+                    else:
+                        # Fallback to transformer engine if phi2 fails
+                        logger.warning(f"Phi2 explanation failed: {result.get('explanation')}")
+                        result = transformer_engine.execute(query, features)
+                else:
+                    # Fallback if Phi2 not loaded or no grounding available
+                    result = transformer_engine.execute(query, features)
+            
+            else:
+                raise HTTPException(status_code=500, detail=f"Unknown engine: {current_engine}")
 
         # ------------------------------------------------
-        # STEP 6: Execute Engine
-        # ------------------------------------------------
-        if engine_name == "RULE":
-            result = rule_engine.execute(query, features)
-
-        elif engine_name == "RETRIEVAL":
-            result = retrieval_engine.execute(query, features)
-
-        elif engine_name == "ML":
-            result = ml_engine.execute(query, features)
-
-        elif engine_name == "TRANSFORMER":
-            result = transformer_engine.execute(query, features)
-
-        else:
-            raise HTTPException(status_code=500, detail=f"Unknown engine: {engine_name}")
-
-        # ------------------------------------------------
-        # STEP 7: Output Validation
+        # STEP 6: Output Validation
         # ------------------------------------------------
         is_valid, validated_answer, validation_details = output_validator.validate(
             answer=result["answer"],
@@ -297,7 +387,7 @@ async def process_query(request: QueryRequest):
         }
 
         # ------------------------------------------------
-        # STEP 8: Return Response
+        # STEP 7: Return Response
         # ------------------------------------------------
         return QueryResponse(
             answer=validated_answer,
@@ -307,6 +397,11 @@ async def process_query(request: QueryRequest):
             metadata={
                 "intent": intent,
                 "intent_confidence": confidence,
+                "active_intents": orchestration_plan["intents"]["active_intents"],
+                "intent_scores": orchestration_plan["intents"]["all_scores"],
+                "engine_chain": orchestration_plan["execution_plan"]["engine_chain"],
+                "classification_method": orchestration_plan["metadata"].get("classification_method", "semantic"),
+                "classification_time_ms": orchestration_plan["metadata"].get("classification_time_ms"),
                 "validation": validation_details,
                 "source": result.get("source"),
                 "computation_type": result.get("computation_type")
@@ -409,15 +504,19 @@ async def get_stats():
 
 @app.get("/intents")
 async def get_intents():
-    """Get list of supported intents."""
+    """Get list of supported intents and execution chains."""
+    routing_map = {
+        str(list(k)): v
+        for k, v in meta_controller.execution_planner.EXECUTION_CHAINS.items()
+    }
     return {
-        "intents": intent_classifier.get_all_intents(),
-        "routing_map": meta_controller.ROUTING_MAP,
+        "intents": meta_controller.intent_classifier.intents,
+        "routing_map": routing_map,
         "description": {
             "FACTUAL": "Factual queries - routed to RETRIEVAL engine",
             "NUMERIC": "Numerical computations - routed to ML engine",
-            "EXPLANATION": "Conceptual explanations - routed to TRANSFORMER engine"
-            
+            "EXPLANATION": "Conceptual explanations - routed to TRANSFORMER engine",
+            "UNSAFE": "Harmful queries - blocked by RULE engine"
         }
     }
 
@@ -425,17 +524,18 @@ async def get_intents():
 @app.get("/model/status")
 async def get_model_status():
     """Get detailed model training and load status."""
-    # Check if we're using trained model or zero-shot
-    model_type = "zero-shot" if intent_classifier.is_loaded else "fallback"
-    
+    ic = meta_controller.intent_classifier
+    ic_loaded = ic.model is not None
+    model_type = "semantic-embedding" if ic_loaded else "fallback-heuristic"
+
     status = {
         "model_type": model_type,
         "intent_classifier": {
-            "loaded": intent_classifier.is_loaded,
-            "model_name": getattr(intent_classifier, "model_name", "unknown"),
-            "type": "DistilBERT MNLI (pre-trained zero-shot)",
+            "loaded": ic_loaded,
+            "model_name": getattr(ic, "model_name", "sentence-transformers/all-MiniLM-L6-v2"),
+            "type": "Semantic Embedding (sentence-transformers/all-MiniLM-L6-v2)",
             "requires_training": False,
-            "status": "✅ READY" if intent_classifier.is_loaded else "⚠️ USING FALLBACK"
+            "status": "✅ READY" if ic_loaded else "⚠️ USING FALLBACK HEURISTIC"
         },
         "transformer_engine": {
             "loaded": transformer_engine.is_loaded,
@@ -445,14 +545,31 @@ async def get_model_status():
             "status": "✅ READY" if transformer_engine.is_loaded else "⚠️ USING FALLBACK"
         },
         "training_info": {
-            "note": "Current system uses pre-trained models that don't require training",
+            "note": "Intent classification uses MiniLM embedding similarity - no training required",
             "feedback_collected": feedback_store.get_feedback_stats().get("total_feedback", 0),
-            "auto_improvement": "Enabled - triggers every 10 feedbacks"
+            "auto_improvement": "Enabled - domain/engine-selector models retrain from feedback"
         },
-        "system_status": "✅ FULLY OPERATIONAL" if (intent_classifier.is_loaded and transformer_engine.is_loaded) else "⚠️ PARTIAL - Using fallback modes"
+        "system_status": "✅ FULLY OPERATIONAL" if (ic_loaded and transformer_engine.is_loaded) else "⚠️ PARTIAL - Using fallback modes"
     }
-    
+
     return status
+
+
+@app.get("/model/registry")
+async def get_model_registry():
+    """Get versioned model registry - lists all saved model versions with metadata."""
+    try:
+        from core.model_registry import get_registry_summary, list_versions
+        summary = get_registry_summary()
+        history = list_versions()
+        return {
+            "status": "ok",
+            "registered_models": summary,
+            "version_history": history[-20:],  # Last 20 versions
+            "note": "SemanticIntentClassifier (MiniLM) is not versioned here - it uses static pre-trained embeddings"
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e), "registered_models": {}}
 
 
 @app.get("/model/metrics")
@@ -668,7 +785,7 @@ def _auto_improve_classifier():
                 "exported_samples": exported_count,
                 "intent_accuracy": intent_accuracy,
                 "auto_retrain_triggered": False,  # Set to True if you add retraining
-                "note": "Using pre-trained zero-shot model - no retraining needed"
+                "note": "Using MiniLM semantic embedding classifier - no retraining needed"
             }
             f.write(json.dumps(log_entry) + "\n")
         
@@ -730,12 +847,11 @@ def _retrain_model():
         if result.returncode == 0:
             print("✅ Model retraining completed successfully!")
             print(result.stdout)
-            
-            # Reload the intent classifier
-            print("\n🔄 Reloading intent classifier...")
-            global intent_classifier
-            intent_classifier = IntentClassifier()
-            
+
+            # SemanticIntentClassifier uses pre-trained MiniLM embeddings and does not
+            # need to be reinstanced after domain/engine-selector retraining.
+            print("\n✓ Retraining complete - semantic intent classifier unchanged (embedding-based)")
+
             return {
                 "success": True,
                 "message": "Model retrained and reloaded successfully",

@@ -47,7 +47,7 @@ class InputAnalyzer:
         digit_count = len(digits)
         
         # Detect math operators
-        math_operators = ['+', '-', '*', '/', 'multiply', 'divide', 'add', 'subtract', 'plus', 'minus', 'times']
+        math_operators = ['+', '-', '*', '/', 'multiply', 'multiplied', 'divide', 'divided', 'add', 'subtract', 'plus', 'minus', 'times']
         has_math_operators = any(op in lowercase for op in math_operators)
         
         # Detect question words
