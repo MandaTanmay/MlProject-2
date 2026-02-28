@@ -3,6 +3,15 @@ Meta-Learning AI System - FastAPI Application
 Production-grade AI orchestration layer that decides how to answer queries.
 NOT a chatbot - it's an intelligent routing system.
 """
+import nltk
+
+try:
+    nltk.data.find('corpora/brown')
+except LookupError:
+    nltk.download('brown')
+    nltk.download('punkt')
+    nltk.download('wordnet')
+    
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -209,6 +218,24 @@ async def process_query(request: QueryRequest):
         if not query:
             raise HTTPException(status_code=400, detail="Query cannot be empty")
 
+        # --------------------------------------------
+        # NORMALIZATION LAYER
+        # --------------------------------------------
+
+        query = query.lower().strip()
+
+        from textblob import TextBlob
+
+        try:
+            blob = TextBlob(query)
+            corrected_query = str(blob.correct())
+            query = corrected_query
+        except Exception:
+            pass  # fallback silently if correction fails
+
+        if not query:
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+
         # ------------------------------------------------
         # STEP 1: Domain Classification
         # ------------------------------------------------
@@ -224,12 +251,10 @@ async def process_query(request: QueryRequest):
                     "domain_confidence": dom_conf
                 }
             )
-
         # ------------------------------------------------
         # STEP 2: HARD SAFETY CHECK (Before Everything)
         # ------------------------------------------------
         from core.safety import is_harmful_input
-
         if is_harmful_input(query):
             return QueryResponse(
                 answer="I'm not able to assist with harmful or dangerous requests.",
@@ -241,18 +266,15 @@ async def process_query(request: QueryRequest):
                     "intent_confidence": 1.0
                 }
             )
-
         # ------------------------------------------------
         # STEP 3: Feature Extraction
         # ------------------------------------------------
         features = input_analyzer.analyze(query)
-
         # ------------------------------------------------
         # STEP 4: Multi-Label Intent Orchestration
         # ------------------------------------------------
         # Uses semantic similarity to determine active intents and execution chain
         orchestration_plan = meta_controller.orchestrate(query, features)
-        
         # Store routing decision in database (Phase 7)
         is_blocked = orchestration_plan.get("status") == "blocked"
         feedback_store.store_routing_log(
@@ -263,7 +285,6 @@ async def process_query(request: QueryRequest):
             status=orchestration_plan.get("status", "ready"),
             is_unsafe=is_blocked
         )
-        
         if is_blocked:
             return QueryResponse(
                 answer="I'm not able to assist with harmful or dangerous requests.",
@@ -272,36 +293,29 @@ async def process_query(request: QueryRequest):
                 reason="Blocked by safety layer.",
                 metadata=orchestration_plan.get("metadata", {})
             )
-        
         execution_plan = orchestration_plan["execution_plan"]
         engines_to_execute = execution_plan["engine_chain"]
         routing_reason = execution_plan["chain_reasoning"]
-        
         intent = orchestration_plan["intents"]["primary_intent"]
         confidence = orchestration_plan["intents"]["primary_confidence"]
         decomposition = orchestration_plan.get("decomposition", {})
-
         # ------------------------------------------------
         # STEP 5: Execute Engine(s)
         # ------------------------------------------------
         result = None
         grounded_data = {}  # Accumulate grounding for explanation engine
-        
         for current_engine in engines_to_execute:
             if current_engine == "RULE" or current_engine == "RULE_ENGINE":
                 result = rule_engine.execute(query, features)
-            
             elif current_engine == "RETRIEVAL" or current_engine == "RETRIEVAL_ENGINE":
                 if decomposition.get("factual_entity"):
                     # Use entity from decomposition if available
                     result = retrieval_engine.execute(decomposition["factual_entity"], features)
                 else:
                     result = retrieval_engine.execute(query, features)
-                
                 # Extract answer - handle both flat and nested response formats
                 factual_answer = result.get("answer") or result.get("data", {}).get("answer", "")
                 grounded_data["factual_result"] = factual_answer
-                
                 # Normalize result to have answer at root level for downstream processing
                 if result.get("status") == "success":
                     if not result.get("answer") and result.get("data", {}).get("answer"):
@@ -317,14 +331,12 @@ async def process_query(request: QueryRequest):
                     result["strategy"] = "RETRIEVAL"
                     result["confidence"] = result.get("confidence", 0.0)
                     result["reason"] = f"Retrieval status: {status}"
-                
                 # The Retrieval Engine sometimes sets source inside data/metadata, not root.
                 if isinstance(result.get("data"), dict):
                     grounded_data["source"] = result["data"].get("source", result.get("source", "Unknown"))
                     result["source"] = grounded_data["source"]
                 else:
                     grounded_data["source"] = result.get("source", "Unknown")
-            
             elif current_engine == "ML" or current_engine == "ML_ENGINE":
                 if decomposition.get("computation_type") == "percentage" and grounded_data.get("factual_result"):
                     import re
@@ -347,7 +359,6 @@ async def process_query(request: QueryRequest):
                 # Store numeric result for grounding explanation
                 grounded_data["numeric_result"] = result.get("answer")
                 grounded_data["computation_type"] = result.get("computation_type")
-            
             elif current_engine == "TRANSFORMER" or current_engine == "TRANSFORMER_ENGINE":
                 # Use Phi2ExplanationEngine if available and grounded data is present
                 if phi2_explanation_engine.is_loaded and grounded_data:
@@ -366,10 +377,8 @@ async def process_query(request: QueryRequest):
                 else:
                     # Fallback if Phi2 not loaded or no grounding available
                     result = transformer_engine.execute(query, features)
-            
             else:
                 raise HTTPException(status_code=500, detail=f"Unknown engine: {current_engine}")
-
         # ------------------------------------------------
         # STEP 6: Output Validation
         # ------------------------------------------------
@@ -379,13 +388,11 @@ async def process_query(request: QueryRequest):
             confidence=result["confidence"],
             query=query
         )
-
         # Store context for feedback
         query_context_cache[query] = {
             "intent": intent,
             "confidence": confidence
         }
-
         # ------------------------------------------------
         # STEP 7: Return Response
         # ------------------------------------------------
@@ -407,10 +414,8 @@ async def process_query(request: QueryRequest):
                 "computation_type": result.get("computation_type")
             }
         )
-
     except HTTPException:
         raise
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
