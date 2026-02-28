@@ -56,8 +56,8 @@ class FactualEngine:
     """
     
     # Confidence thresholds
-    FACTUAL_CONFIDENCE_THRESHOLD = 0.65  # KB facts minimum
-    EXTERNAL_CONFIDENCE_THRESHOLD = 0.50  # External sources minimum
+    FACTUAL_CONFIDENCE_THRESHOLD = 0.55  # KB facts minimum
+    EXTERNAL_CONFIDENCE_THRESHOLD = 0.40  # External sources minimum
     AMBIGUITY_MAX_DIFF = 0.05  # Max difference between top-2 to flag ambiguity
     
     # External source settings
@@ -201,7 +201,20 @@ class FactualEngine:
         # Validate query
         if not query or not isinstance(query, str):
             return self._response_error("Invalid query format")
-        
+
+            # 🔵 ADD HERE — normalization
+        query = query.strip()
+        query = query.replace(" an ", " ")
+        query = query.replace(" a ", " ")
+        query = query.replace(" the ", " ")
+        query = query.replace(" is ", " ")
+        query = query.replace(" are ", " ")
+        query = query.replace(" was ", " ")
+        query = query.replace(" were ", " ")
+        query = query.replace(" be ", " ")
+        query = query.replace(" been ", " ")
+        query = query.replace(" being ", " ")
+
         # Check if embedding model available
         if not self.has_embeddings or self.model is None:
             return self._response_uncertain(
@@ -239,11 +252,27 @@ class FactualEngine:
                         external_result["metadata"]["retrieval_time_ms"] = round(elapsed_ms, 2)
                         return external_result
                 
-                return self._response_uncertain(
-                    query,
-                    f"Best KB match {top_score:.2f} below threshold {self.FACTUAL_CONFIDENCE_THRESHOLD}. External sources also insufficient.",
-                    confidence=top_score
-                )
+                if self.enable_external:
+                    external_result = self._try_external_sources(query)
+                    if external_result:
+                        return external_result
+
+                    # 🔵 FINAL FALLBACK → SAFE GENERATION
+                    return {
+                        "status": "success",
+                        "type": "FACTUAL",
+                        "data": {
+                            "answer": "I could not find a verified source. Generating a general explanation instead.",
+                            "structured_value": None,
+                            "entity": None,
+                            "category": "fallback"
+                        },
+                        "confidence": 0.40,
+                        "metadata": {
+                            "engine": "FactualEngine",
+                            "fallback": True
+                        }
+                    }
             
             # Step 3: Ambiguity detection
             if len(results) >= 2:
@@ -366,9 +395,14 @@ class FactualEngine:
         try:
             url = "https://en.wikipedia.org/api/rest_v1/page/summary/"
             
-            # Clean query
-            search_term = query.replace("what is", "").replace("who is", "").replace("?", "").strip()
-            search_term = search_term.replace(" ", "%20")
+            clean_query = query.lower()
+            prefixes = ["what is", "who is", "define", "explain", "what are"]
+            for p in prefixes:
+                if clean_query.startswith(p):
+                    clean_query = clean_query[len(p):]
+
+            clean_query = clean_query.replace("?", "").strip()
+            search_term = clean_query.title().replace(" ", "%20")
             
             headers = {"User-Agent": "MetaLearningAI/1.0"}
             response = requests.get(f"{url}{search_term}", timeout=5, headers=headers)

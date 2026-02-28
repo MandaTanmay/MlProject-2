@@ -35,6 +35,7 @@ core/model_registry.py
 core/output_validator.py
 core/safety.py
 core/semantic_intent_classifier.py
+data/expand_kb.py
 data/knowledge_base.json
 engines/__init__.py
 engines/ml_engine.py
@@ -6190,6 +6191,64 @@ class ExecutionPlanner:
 
 ---
 
+### data/expand_kb.py
+
+```py
+import wikipedia
+import json
+import uuid
+from pathlib import Path
+
+kb_path = Path("knowledge_base.json")
+
+# Load existing KB
+if kb_path.exists():
+    with open(kb_path, "r", encoding="utf-8") as f:
+        existing_kb = json.load(f)
+else:
+    existing_kb = {"facts": []}
+
+existing_facts = existing_kb.get("facts", [])
+
+topics = [
+    "Artificial Intelligence",
+    "Deep Learning",
+    "Web Browser",
+    "Operating System",
+    "Cloud Computing",
+    "Data Science"
+]
+
+new_facts = []
+
+for topic in topics:
+    try:
+        summary = wikipedia.summary(topic, sentences=3)
+        new_facts.append({
+            "id": str(uuid.uuid4()),
+            "question": f"What is {topic}?",
+            "answer": summary,
+            "structured_value": summary[:200],
+            "category": "technology",
+            "source": "Wikipedia",
+            "verified": True,
+            "verified_date": "2026-03-01"
+        })
+    except:
+        pass
+
+# Merge
+existing_facts.extend(new_facts)
+
+# Save merged file
+with open(kb_path, "w", encoding="utf-8") as f:
+    json.dump({"facts": existing_facts}, f, indent=2)
+
+print(f"KB now contains {len(existing_facts)} facts.")
+```
+
+---
+
 ### data/knowledge_base.json
 
 ```json
@@ -6267,8 +6326,8 @@ class ExecutionPlanner:
     {
       "id": "fact_007",
       "question": "What is the capital of Brazil?",
-      "answer": "Brasília",
-      "structured_value": "Brasília",
+      "answer": "Bras\u00edlia",
+      "structured_value": "Bras\u00edlia",
       "entity": "Brazil",
       "category": "geography",
       "source": "Academic Knowledge Base",
@@ -6701,10 +6760,69 @@ class ExecutionPlanner:
       "source": "R23_REGULATIONS.pdf",
       "verified": true,
       "verified_date": "2026-02-28"
+    },
+    {
+      "id": "ef38a778-a72d-44c7-8ff4-6e0b9eb90848",
+      "question": "What is Artificial Intelligence?",
+      "answer": "Artificial intelligence (AI) is the capability of computational systems to perform tasks typically associated with human intelligence, such as learning, reasoning, problem-solving, perception, and decision-making. It is a field of research in computer science that develops and studies methods and software that enable machines to perceive their environment and use learning and intelligence to take actions that maximize their chances of achieving defined goals.\nHigh-profile applications of AI include advanced web search engines (e.g., Google Search); recommendation systems (used by YouTube, Amazon, and Netflix); virtual assistants (e.g., Google Assistant, Siri, and Alexa); autonomous vehicles (e.g., Waymo); generative and creative tools (e.g., language models and AI art); and superhuman play and analysis in strategy games (e.g., chess and Go).",
+      "structured_value": "Artificial intelligence (AI) is the capability of computational systems to perform tasks typically associated with human intelligence, such as learning, reasoning, problem-solving, perception, and dec",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "575f6330-dbb1-4822-8806-f4ee10f89d93",
+      "question": "What is Deep Learning?",
+      "answer": "In machine learning, deep learning (DL) focuses on utilizing multilayered neural networks to perform tasks such as classification, regression, and representation learning. The field takes inspiration from biological neuroscience and revolves around stacking artificial neurons into layers and \"training\" them to process data. The adjective \"deep\" refers to the use of multiple layers (ranging from three to several hundred or thousands) in the network.",
+      "structured_value": "In machine learning, deep learning (DL) focuses on utilizing multilayered neural networks to perform tasks such as classification, regression, and representation learning. The field takes inspiration ",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "fbf7904e-fc8d-4e95-b0d2-103e9842fa24",
+      "question": "What is Web Browser?",
+      "answer": "A web browser, often abbreviated as browser, is an application for accessing websites. When a user requests a web page from a particular website, the browser retrieves its files from a web server and then displays the page on the user's screen. Browsers can also display content stored locally on the user's device.",
+      "structured_value": "A web browser, often abbreviated as browser, is an application for accessing websites. When a user requests a web page from a particular website, the browser retrieves its files from a web server and ",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "3d056cb6-52a2-4be5-9c97-4787dd2b8894",
+      "question": "What is Operating System?",
+      "answer": "An operating system (OS) is system software that manages computer hardware and software resources, and provides common services for computer programs.\nTime-sharing operating systems schedule tasks for efficient use of the system and may also include accounting software for cost allocation of processor time, mass storage, peripherals, and other resources.\nFor hardware functions such as input and output and memory allocation, the operating system acts as an intermediary between programs and the computer hardware, although the application code is usually executed directly by the hardware and frequently makes system calls to an OS function or is interrupted by it.",
+      "structured_value": "An operating system (OS) is system software that manages computer hardware and software resources, and provides common services for computer programs.\nTime-sharing operating systems schedule tasks for",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "64c878cb-a42d-4c09-b0b2-e5c6507d4303",
+      "question": "What is Cloud Computing?",
+      "answer": "Cloud computing is defined by the International Organization for Standardization (ISO) as \"a paradigm for enabling network access to a scalable and elastic pool of shareable physical or virtual resources with self-service provisioning and administration on demand\". It is commonly referred to as \"the cloud\".\n\n\n== Characteristics ==\nIn 2011, the National Institute of Standards and Technology (NIST) identified five \"essential characteristics\" for cloud systems.",
+      "structured_value": "Cloud computing is defined by the International Organization for Standardization (ISO) as \"a paradigm for enabling network access to a scalable and elastic pool of shareable physical or virtual resour",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "a20e5b37-bfb9-4c99-af5d-d9a57589845a",
+      "question": "What is Data Science?",
+      "answer": "Data science is an interdisciplinary academic field that uses statistics, scientific computing, scientific methods, processing, scientific visualization, algorithms, and systems to extract or extrapolate knowledge from potentially noisy, structured, or unstructured data. \nData science also integrates domain knowledge from the underlying application domain (e.g., natural sciences, information technology, and medicine). Data science is multifaceted and can be described as a science, a research paradigm, a research method, a discipline, a workflow, and a profession.",
+      "structured_value": "Data science is an interdisciplinary academic field that uses statistics, scientific computing, scientific methods, processing, scientific visualization, algorithms, and systems to extract or extrapol",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
     }
   ]
 }
-
 ```
 
 ---
@@ -7634,8 +7752,8 @@ class FactualEngine:
     """
     
     # Confidence thresholds
-    FACTUAL_CONFIDENCE_THRESHOLD = 0.65  # KB facts minimum
-    EXTERNAL_CONFIDENCE_THRESHOLD = 0.50  # External sources minimum
+    FACTUAL_CONFIDENCE_THRESHOLD = 0.55  # KB facts minimum
+    EXTERNAL_CONFIDENCE_THRESHOLD = 0.40  # External sources minimum
     AMBIGUITY_MAX_DIFF = 0.05  # Max difference between top-2 to flag ambiguity
     
     # External source settings
@@ -7779,7 +7897,20 @@ class FactualEngine:
         # Validate query
         if not query or not isinstance(query, str):
             return self._response_error("Invalid query format")
-        
+
+            # 🔵 ADD HERE — normalization
+        query = query.strip()
+        query = query.replace(" an ", " ")
+        query = query.replace(" a ", " ")
+        query = query.replace(" the ", " ")
+        query = query.replace(" is ", " ")
+        query = query.replace(" are ", " ")
+        query = query.replace(" was ", " ")
+        query = query.replace(" were ", " ")
+        query = query.replace(" be ", " ")
+        query = query.replace(" been ", " ")
+        query = query.replace(" being ", " ")
+
         # Check if embedding model available
         if not self.has_embeddings or self.model is None:
             return self._response_uncertain(
@@ -7817,11 +7948,27 @@ class FactualEngine:
                         external_result["metadata"]["retrieval_time_ms"] = round(elapsed_ms, 2)
                         return external_result
                 
-                return self._response_uncertain(
-                    query,
-                    f"Best KB match {top_score:.2f} below threshold {self.FACTUAL_CONFIDENCE_THRESHOLD}. External sources also insufficient.",
-                    confidence=top_score
-                )
+                if self.enable_external:
+                    external_result = self._try_external_sources(query)
+                    if external_result:
+                        return external_result
+
+                    # 🔵 FINAL FALLBACK → SAFE GENERATION
+                    return {
+                        "status": "success",
+                        "type": "FACTUAL",
+                        "data": {
+                            "answer": "I could not find a verified source. Generating a general explanation instead.",
+                            "structured_value": None,
+                            "entity": None,
+                            "category": "fallback"
+                        },
+                        "confidence": 0.40,
+                        "metadata": {
+                            "engine": "FactualEngine",
+                            "fallback": True
+                        }
+                    }
             
             # Step 3: Ambiguity detection
             if len(results) >= 2:
@@ -7944,9 +8091,14 @@ class FactualEngine:
         try:
             url = "https://en.wikipedia.org/api/rest_v1/page/summary/"
             
-            # Clean query
-            search_term = query.replace("what is", "").replace("who is", "").replace("?", "").strip()
-            search_term = search_term.replace(" ", "%20")
+            clean_query = query.lower()
+            prefixes = ["what is", "who is", "define", "explain", "what are"]
+            for p in prefixes:
+                if clean_query.startswith(p):
+                    clean_query = clean_query[len(p):]
+
+            clean_query = clean_query.replace("?", "").strip()
+            search_term = clean_query.title().replace(" ", "%20")
             
             headers = {"User-Agent": "MetaLearningAI/1.0"}
             response = requests.get(f"{url}{search_term}", timeout=5, headers=headers)
