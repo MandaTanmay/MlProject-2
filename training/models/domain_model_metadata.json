@@ -1,12 +1,12 @@
 {
   "model_type": "TF-IDF + Logistic Regression",
-  "train_accuracy": 0.9961538461538462,
-  "test_accuracy": 0.8615384615384616,
-  "cv_mean": 0.8492307692307692,
-  "cv_std": 0.06627895147242467,
-  "training_samples": 260,
-  "test_samples": 65,
-  "features": 1746,
+  "train_accuracy": 0.9969879518072289,
+  "test_accuracy": 0.8554216867469879,
+  "cv_mean": 0.7903614457831326,
+  "cv_std": 0.10068714417241534,
+  "training_samples": 332,
+  "test_samples": 83,
+  "features": 1953,
   "classes": [
     "OUTSIDE",
     "STUDENT"

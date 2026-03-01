@@ -3835,11 +3835,28 @@ async def process_query(request: QueryRequest):
 
         if not query:
             raise HTTPException(status_code=400, detail="Query cannot be empty")
-
         # ------------------------------------------------
-        # STEP 1: Domain Classification
+        # STEP 1: HARD SAFETY CHECK (FIRST)
+        # ------------------------------------------------
+        from core.safety import is_harmful_input
+        
+        if is_harmful_input(query):
+            return QueryResponse(
+                answer="I'm not able to assist with harmful or dangerous requests.",
+                strategy="SAFETY",
+                confidence=1.0,
+                reason="Blocked by safety layer before domain classification.",
+                metadata={
+                    "intent": "UNSAFE",
+                    "intent_confidence": 1.0
+                }
+            )
+        
+        # ------------------------------------------------
+        # STEP 2: Domain Classification
         # ------------------------------------------------
         domain, dom_conf = domain_classifier.predict(query)
+        
         if domain == "OUTSIDE":
             return QueryResponse(
                 answer=domain_classifier.get_refusal_message(),
@@ -3849,21 +3866,6 @@ async def process_query(request: QueryRequest):
                 metadata={
                     "domain": domain,
                     "domain_confidence": dom_conf
-                }
-            )
-        # ------------------------------------------------
-        # STEP 2: HARD SAFETY CHECK (Before Everything)
-        # ------------------------------------------------
-        from core.safety import is_harmful_input
-        if is_harmful_input(query):
-            return QueryResponse(
-                answer="I'm not able to assist with harmful or dangerous requests.",
-                strategy="SAFETY",
-                confidence=1.0,
-                reason="Blocked by safety layer before classification.",
-                metadata={
-                    "intent": "UNSAFE",
-                    "intent_confidence": 1.0
                 }
             )
         # ------------------------------------------------
@@ -4619,17 +4621,34 @@ class DomainClassifier:
             return self._fallback_prediction(query)
         
         try:
-            # Vectorize query
             query_vec = self.vectorizer.transform([query])
+
             
-            # Predict domain
-            domain = self.classifier.predict(query_vec)[0]
-            
-            # Get confidence (probability of predicted class)
+
             probabilities = self.classifier.predict_proba(query_vec)[0]
-            confidence = max(probabilities)
-            
-            return domain, float(confidence)
+
+            # Extract probabilities properly
+            student_index = list(self.classifier.classes_).index("STUDENT")
+            outside_index = list(self.classifier.classes_).index("OUTSIDE")
+
+            student_prob = probabilities[student_index]
+            outside_prob = probabilities[outside_index]
+
+            confidence = max(student_prob, outside_prob)
+
+            # -----------------------------
+            # STRICT ACADEMIC POLICY
+            # -----------------------------
+
+            STUDENT_THRESHOLD = 0.65
+            MARGIN_THRESHOLD = 0.15
+
+            margin = student_prob - outside_prob
+
+            if student_prob >= STUDENT_THRESHOLD and margin >= MARGIN_THRESHOLD:
+                return "STUDENT", float(student_prob)
+            else:
+                return "OUTSIDE", float(outside_prob)
             
         except Exception as e:
             print(f"✗ Domain prediction error: {e}")
@@ -4693,7 +4712,7 @@ class DomainClassifier:
         else:
             # Ambiguous - default to STUDENT domain with low confidence
             # (allows academic queries without specific keywords)
-            return "STUDENT", 0.6
+            return "OUTSIDE", 0.6
     
     def get_refusal_message(self) -> str:
         """
@@ -12477,13 +12496,13 @@ if __name__ == "__main__":
 ```json
 {
   "model_type": "TF-IDF + Logistic Regression",
-  "train_accuracy": 0.9961538461538462,
-  "test_accuracy": 0.8615384615384616,
-  "cv_mean": 0.8492307692307692,
-  "cv_std": 0.06627895147242467,
-  "training_samples": 260,
-  "test_samples": 65,
-  "features": 1746,
+  "train_accuracy": 0.9969879518072289,
+  "test_accuracy": 0.8554216867469879,
+  "cv_mean": 0.7903614457831326,
+  "cv_std": 0.10068714417241534,
+  "training_samples": 332,
+  "test_samples": 83,
+  "features": 1953,
   "classes": [
     "OUTSIDE",
     "STUDENT"
@@ -12500,21 +12519,21 @@ if __name__ == "__main__":
   "models": {
     "domain_classifier": {
       "model_name": "domain_classifier",
-      "version": 1,
-      "timestamp": "2026-02-28T20:44:56.110263",
-      "versioned_file": "domain_classifier_v1_2026_02_28_204456.joblib",
+      "version": 4,
+      "timestamp": "2026-03-01T14:29:25.161474",
+      "versioned_file": "domain_classifier_v4_2026_03_01_142925.joblib",
       "canonical_file": "domain_classifier.joblib",
       "metadata": {
         "model_type": "TF-IDF + Logistic Regression",
-        "test_accuracy": 0.8615384615384616,
-        "training_samples": 260
+        "test_accuracy": 0.8554216867469879,
+        "training_samples": 332
       }
     },
     "domain_vectorizer": {
       "model_name": "domain_vectorizer",
-      "version": 1,
-      "timestamp": "2026-02-28T20:44:56.138165",
-      "versioned_file": "domain_vectorizer_v1_2026_02_28_204456.joblib",
+      "version": 4,
+      "timestamp": "2026-03-01T14:29:25.207905",
+      "versioned_file": "domain_vectorizer_v4_2026_03_01_142925.joblib",
       "canonical_file": "domain_vectorizer.joblib",
       "metadata": {
         "model_type": "TF-IDF"
@@ -12539,6 +12558,72 @@ if __name__ == "__main__":
       "version": 1,
       "timestamp": "2026-02-28T20:44:56.138165",
       "versioned_file": "domain_vectorizer_v1_2026_02_28_204456.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 2,
+      "timestamp": "2026-03-01T13:51:04.244320",
+      "versioned_file": "domain_classifier_v2_2026_03_01_135104.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8148148148148148,
+        "training_samples": 324
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 2,
+      "timestamp": "2026-03-01T13:51:04.281883",
+      "versioned_file": "domain_vectorizer_v2_2026_03_01_135104.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 3,
+      "timestamp": "2026-03-01T14:29:09.631917",
+      "versioned_file": "domain_classifier_v3_2026_03_01_142909.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8554216867469879,
+        "training_samples": 332
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 3,
+      "timestamp": "2026-03-01T14:29:09.666379",
+      "versioned_file": "domain_vectorizer_v3_2026_03_01_142909.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 4,
+      "timestamp": "2026-03-01T14:29:25.161474",
+      "versioned_file": "domain_classifier_v4_2026_03_01_142925.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8554216867469879,
+        "training_samples": 332
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 4,
+      "timestamp": "2026-03-01T14:29:25.207905",
+      "versioned_file": "domain_vectorizer_v4_2026_03_01_142925.joblib",
       "canonical_file": "domain_vectorizer.joblib",
       "metadata": {
         "model_type": "TF-IDF"

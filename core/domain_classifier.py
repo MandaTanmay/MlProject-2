@@ -97,17 +97,34 @@ class DomainClassifier:
             return self._fallback_prediction(query)
         
         try:
-            # Vectorize query
             query_vec = self.vectorizer.transform([query])
+
             
-            # Predict domain
-            domain = self.classifier.predict(query_vec)[0]
-            
-            # Get confidence (probability of predicted class)
+
             probabilities = self.classifier.predict_proba(query_vec)[0]
-            confidence = max(probabilities)
-            
-            return domain, float(confidence)
+
+            # Extract probabilities properly
+            student_index = list(self.classifier.classes_).index("STUDENT")
+            outside_index = list(self.classifier.classes_).index("OUTSIDE")
+
+            student_prob = probabilities[student_index]
+            outside_prob = probabilities[outside_index]
+
+            confidence = max(student_prob, outside_prob)
+
+            # -----------------------------
+            # STRICT ACADEMIC POLICY
+            # -----------------------------
+
+            STUDENT_THRESHOLD = 0.65
+            MARGIN_THRESHOLD = 0.15
+
+            margin = student_prob - outside_prob
+
+            if student_prob >= STUDENT_THRESHOLD and margin >= MARGIN_THRESHOLD:
+                return "STUDENT", float(student_prob)
+            else:
+                return "OUTSIDE", float(outside_prob)
             
         except Exception as e:
             print(f"✗ Domain prediction error: {e}")
@@ -171,7 +188,7 @@ class DomainClassifier:
         else:
             # Ambiguous - default to STUDENT domain with low confidence
             # (allows academic queries without specific keywords)
-            return "STUDENT", 0.6
+            return "OUTSIDE", 0.6
     
     def get_refusal_message(self) -> str:
         """

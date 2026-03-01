@@ -235,11 +235,28 @@ async def process_query(request: QueryRequest):
 
         if not query:
             raise HTTPException(status_code=400, detail="Query cannot be empty")
-
         # ------------------------------------------------
-        # STEP 1: Domain Classification
+        # STEP 1: HARD SAFETY CHECK (FIRST)
+        # ------------------------------------------------
+        from core.safety import is_harmful_input
+        
+        if is_harmful_input(query):
+            return QueryResponse(
+                answer="I'm not able to assist with harmful or dangerous requests.",
+                strategy="SAFETY",
+                confidence=1.0,
+                reason="Blocked by safety layer before domain classification.",
+                metadata={
+                    "intent": "UNSAFE",
+                    "intent_confidence": 1.0
+                }
+            )
+        
+        # ------------------------------------------------
+        # STEP 2: Domain Classification
         # ------------------------------------------------
         domain, dom_conf = domain_classifier.predict(query)
+        
         if domain == "OUTSIDE":
             return QueryResponse(
                 answer=domain_classifier.get_refusal_message(),
@@ -249,21 +266,6 @@ async def process_query(request: QueryRequest):
                 metadata={
                     "domain": domain,
                     "domain_confidence": dom_conf
-                }
-            )
-        # ------------------------------------------------
-        # STEP 2: HARD SAFETY CHECK (Before Everything)
-        # ------------------------------------------------
-        from core.safety import is_harmful_input
-        if is_harmful_input(query):
-            return QueryResponse(
-                answer="I'm not able to assist with harmful or dangerous requests.",
-                strategy="SAFETY",
-                confidence=1.0,
-                reason="Blocked by safety layer before classification.",
-                metadata={
-                    "intent": "UNSAFE",
-                    "intent_confidence": 1.0
                 }
             )
         # ------------------------------------------------
