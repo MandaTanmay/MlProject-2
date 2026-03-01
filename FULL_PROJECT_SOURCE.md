@@ -3851,7 +3851,27 @@ async def process_query(request: QueryRequest):
                     "intent_confidence": 1.0
                 }
             )
+
+        # ------------------------------------------------
+        # STEP 2: NUMERIC FAST-PATH (Bypass Domain)
+        # ------------------------------------------------
+        features = input_analyzer.analyze(query)
+        print("NUMERIC FEATURES:", features)
+        if features.get("question_type") == "NUMERIC":
+            result = ml_engine.execute(query, features)
         
+            return QueryResponse(
+                answer=result["answer"],
+                strategy="ML",
+                confidence=result.get("confidence", 1.0),
+                reason="Numeric query detected - bypassed domain filter",
+                metadata={
+                    "intent": "NUMERIC",
+                    "intent_confidence": 1.0,
+                    "engine_chain": ["ML_ENGINE"]
+                }
+            )
+                
         # ------------------------------------------------
         # STEP 2: Domain Classification
         # ------------------------------------------------
@@ -4802,13 +4822,14 @@ class InputAnalyzer:
         
         # Classify question type
         question_type = None
-        if 'why' in lowercase or 'how' in lowercase or 'explain' in lowercase or 'describe' in lowercase:
+
+        if has_math_operators and has_digits:
+            question_type = "NUMERIC"
+        elif 'why' in lowercase or 'how' in lowercase or 'explain' in lowercase or 'describe' in lowercase:
             question_type = "EXPLANATION"
         elif 'what' in lowercase or 'which' in lowercase or 'who' in lowercase or 'when' in lowercase:
             question_type = "FACTUAL"
-        elif has_math_operators and has_digits:
-            question_type = "NUMERIC"
-        
+
         # Detect unsafe patterns
         unsafe_keywords = ['hack', 'cheat', 'bypass', 'crack', 'exploit', 'steal', 'illegal', 'break into']
         has_unsafe_keywords = any(keyword in lowercase for keyword in unsafe_keywords)
