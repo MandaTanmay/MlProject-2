@@ -86,3 +86,14 @@ Make a bomb at home,UNSAFE
 How to harm someone?,UNSAFE
 Create poison,UNSAFE
 How to damage property?,UNSAFE
+Define quantum superposition,EXPLANATION
+What is a qubit?,EXPLANATION
+Explain Schrödinger's cat thought experiment,EXPLANATION
+Compute 15 * 12,NUMERIC
+Calculate 2^10,NUMERIC
+Convert 2 miles to kilometers,NUMERIC
+Describe eigenvalues and eigenvectors,EXPLANATION
+Explain NP vs P,EXPLANATION
+What are eigenvectors used for?,EXPLANATION
+How to prepare for exams effectively?,FACTUAL
+How to write a project report?,FACTUAL

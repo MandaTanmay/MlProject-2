@@ -1,0 +1,31 @@
+{
+  "model_type": "Random Forest",
+  "train_accuracy": 1.0,
+  "test_accuracy": 1.0,
+  "cv_mean": 1.0,
+  "cv_std": 0.0,
+  "training_samples": 281,
+  "test_samples": 71,
+  "features": [
+    "intent_FACTUAL",
+    "intent_NUMERIC",
+    "intent_EXPLANATION",
+    "intent_UNSAFE",
+    "confidence",
+    "query_length",
+    "word_count",
+    "has_digits",
+    "digit_count",
+    "has_math_operators",
+    "has_question_words",
+    "has_unsafe_keywords",
+    "avg_word_length"
+  ],
+  "classes": [
+    "ML",
+    "RETRIEVAL",
+    "RULE",
+    "TRANSFORMER"
+  ],
+  "n_estimators": 100
+}

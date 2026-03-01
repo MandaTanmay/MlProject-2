@@ -398,6 +398,17 @@ How is the economy?,OUTSIDE
 What is inflation?,OUTSIDE
 Tell me about tourism.,OUTSIDE
 What is cryptocurrency?,OUTSIDE
+Define quantum superposition,STUDENT
+What is a qubit?,STUDENT
+Explain Schrödinger's cat thought experiment,STUDENT
+Compute 15 * 12,STUDENT
+Calculate 2^10,STUDENT
+Convert 2 miles to kilometers,STUDENT
+Describe eigenvalues and eigenvectors,STUDENT
+Explain NP vs P,STUDENT
+What are eigenvectors used for?,STUDENT
+How to prepare for exams effectively?,STUDENT
+How to write a project report?,STUDENT
 What is Bitcoin?,OUTSIDE
 Explain climate change.,OUTSIDE
 What is global warming?,OUTSIDE
@@ -414,7 +425,5 @@ Explain Snapchat,OUTSIDE
 Explain WhatsApp,OUTSIDE
 Explain Google,OUTSIDE
 Explain Netflix,OUTSIDE
-Explain sex,OUTSIDE
-Explain porn,OUTSIDE
 Explain politics,OUTSIDE
 Explain cricket,OUTSIDE

@@ -7,6 +7,9 @@ from typing import Tuple
 from pathlib import Path
 import joblib
 import warnings
+import re
+import difflib
+import json
 
 warnings.filterwarnings('ignore')
 
@@ -38,6 +41,8 @@ class DomainClassifier:
         self.vectorizer = None
         self.classifier = None
         self.is_loaded = False
+        self._kb = None
+        self._kb_tokens = set()
         
         # Try to load trained models
         self.load_models()
@@ -81,6 +86,50 @@ class DomainClassifier:
         """
         # SRKR whitelist - always classify as STUDENT with high confidence
         query_lower = query.lower()
+
+        # Quick KB lookup: accept short/simple queries that match knowledge base
+        try:
+            if self._kb is None:
+                kb_path = Path(__file__).parent.parent / "data" / "knowledge_base.json"
+                if kb_path.exists():
+                    with open(kb_path, "r", encoding="utf-8") as f:
+                        self._kb = json.load(f)
+                else:
+                    self._kb = {"facts": []}
+            # Build a token/alias set from KB (cache)
+            if not self._kb_tokens:
+                for fact in self._kb.get("facts", []):
+                    for field in ("entity", "question", "id"):
+                        val = fact.get(field, "")
+                        if not val:
+                            continue
+                        val_l = val.lower()
+                        # add full phrase
+                        self._kb_tokens.add(val_l)
+                        # add individual tokens
+                        for tok in re.findall(r"\w+", val_l):
+                            if len(tok) > 1:
+                                self._kb_tokens.add(tok)
+
+            # If query is a short token or phrase, check KB tokens/aliases
+            if len(query.strip()) <= 30:
+                qtok = query_lower.strip()
+                # direct or substring match against KB phrases
+                if qtok in self._kb_tokens:
+                    return "STUDENT", 0.95
+                for phrase in self._kb_tokens:
+                    if qtok == phrase or qtok in phrase or phrase in qtok:
+                        return "STUDENT", 0.95
+                # fuzzy match on tokens
+                try:
+                    match = difflib.get_close_matches(qtok, list(self._kb_tokens), n=1, cutoff=0.78)
+                    if match:
+                        return "STUDENT", 0.9
+                except Exception:
+                    pass
+        except Exception:
+            # don't fail noisy KB checks
+            pass
         srkr_keywords = [
             'srkr', 'b.tech', 'btech', 'jntuk', 'naac', 'aicte', 
             'r23', 'regulation', 'credits', 'cgpa', 'gpa', 'semester',
@@ -91,6 +140,21 @@ class DomainClassifier:
         ]
         if any(kw in query_lower for kw in srkr_keywords):
             return "STUDENT", 0.95
+
+        # Quick numeric/arithmetic detection: allow standalone math expressions
+        if re.match(r'^[\d\s\+\-\*\/\^\.\%\(\)]+$', query.strip()):
+            return "STUDENT", 0.99
+
+        # Fuzzy keyword check: catch common academic keywords even if misspelled
+        fuzzy_keywords = [
+            'quantum', 'quantum computing', 'machine learning', 'artificial intelligence',
+            'algorithm', 'mathematics', 'physics', 'chemistry', 'biology', 'computer', 'programming'
+        ]
+        tokens = re.findall(r"\w+", query_lower)
+        for tok in tokens:
+            match = difflib.get_close_matches(tok, fuzzy_keywords, n=1, cutoff=0.8)
+            if match:
+                return "STUDENT", 0.9
         
         if not self.is_loaded:
             # Fallback to rule-based classification
@@ -188,7 +252,10 @@ class DomainClassifier:
         else:
             # Ambiguous - default to STUDENT domain with low confidence
             # (allows academic queries without specific keywords)
-            return "OUTSIDE", 0.6
+            # NOTE: previously returned OUTSIDE here which caused simple
+            # numeric/math queries (e.g. "2+2") to be blocked. Return
+            # STUDENT by default to align with the comment and intended behavior.
+            return "STUDENT", 0.6
     
     def get_refusal_message(self) -> str:
         """

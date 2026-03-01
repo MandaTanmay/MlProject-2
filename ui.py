@@ -256,18 +256,31 @@ if "last_result" in st.session_state:
             role = msg["role"]
             content = msg["content"]
             if role == "user":
-                st.markdown(f"<div class='message-bubble' style='justify-content:flex-end;'><div class='bubble-user'>{content}</div><div class='avatar avatar-user'>U</div></div>", unsafe_allow_html=True)
+                # User messages on the LEFT (avatar then bubble)
+                st.markdown(
+                    f"<div class='message-bubble' style='justify-content:flex-start;'><div class='avatar avatar-user'>U</div><div class='bubble-user'>{content}</div></div>",
+                    unsafe_allow_html=True
+                )
             else:
-                st.markdown(f"<div class='message-bubble' style='justify-content:flex-start;'><div class='avatar avatar-ai'>AI</div><div class='bubble-ai'>{content}</div></div>", unsafe_allow_html=True)
+                # AI / system messages on the RIGHT (bubble then avatar)
+                st.markdown(
+                    f"<div class='message-bubble' style='justify-content:flex-end;'><div class='bubble-ai'>{content}</div><div class='avatar avatar-ai'>AI</div></div>",
+                    unsafe_allow_html=True
+                )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Floating input area
-    st.markdown("<div class='input-floating'>", unsafe_allow_html=True)
-    st.markdown("<div class='input-inner'>", unsafe_allow_html=True)
-    user_input = st.text_input("", value=st.session_state.get("input_text", ""), max_chars=2000, placeholder="Type your message and press Enter...", key="input_box", label_visibility="collapsed")
-    send_clicked = st.button("Send", key="send_btn", help="Send message", use_container_width=False)
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Floating input area - hide while a query is pending/processing
+    if "pending_ai_query" not in st.session_state:
+        st.markdown("<div class='input-floating'>", unsafe_allow_html=True)
+        st.markdown("<div class='input-inner'>", unsafe_allow_html=True)
+        user_input = st.text_input("", value=st.session_state.get("input_text", ""), max_chars=2000, placeholder="Type your message and press Enter...", key="input_box", label_visibility="collapsed")
+        send_clicked = st.button("Send", key="send_btn", help="Send message", use_container_width=False)
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        # Ensure variables exist when input is hidden
+        user_input = ""
+        send_clicked = False
 
     # Handle API status
     api_healthy = check_api_health()
@@ -609,14 +622,17 @@ def render_message(msg, msg_type="user"):
 
             st.markdown("### 🧠 Meta-Learning AI")
 
-            # Strategy badge
-            st.markdown(f"**Strategy:** {strategy}")
+            # Strategy badge (show emoji + pretty label)
+            pretty_strategy = strategy.replace("_", " ").title()
+            st.markdown(f"**Strategy:** {get_strategy_emoji(strategy)} {pretty_strategy}")
             st.write(answer)
 
             with st.expander("Orchestration Details"):
-                st.write("**Active Intents:**", ", ".join(active_intents) or "N/A")
-                st.write("**Execution Chain:**", " → ".join(engine_chain) or "N/A")
-                st.write("**Confidence:**", f"{confidence:.1%}")
+                active_str = ", ".join(active_intents) if active_intents else "N/A"
+                chain_str = " → ".join(engine_chain) if engine_chain else "N/A"
+                st.write(f"**Active Intents:** {active_str}")
+                st.write(f"**Execution Chain:** {chain_str}")
+                st.write(f"**Confidence:** {confidence:.1%}")
 
                 if intent_scores:
                     st.write("**Intent Scores:**")

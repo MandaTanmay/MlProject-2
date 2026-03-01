@@ -1,0 +1,3 @@
+query,intent
+Test query for database,FACTUAL
+Another test query,NUMERIC

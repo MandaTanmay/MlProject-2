@@ -47,6 +47,13 @@ HARMFUL_PATTERNS = [
     r"\bsql injection\b",
     r"\bbrute force\b",
 
+    # Academic misconduct
+    r"\bcheat(ing|s)?\b",
+    r"\bcopy answers\b",
+    r"\bplagiar(i(s|z)e|ism)\b",
+    r"\bbypass attendance\b",
+    r"\bmanipulat(e|ion) (exam|results|grades)?\b",
+
     # Violence paraphrases
     r"\beliminate\b",
     r"\bget rid of\b",
@@ -76,7 +83,8 @@ def is_harmful_input(text: str) -> bool:
     # --------------------------------------------
     # If user asks HOW TO + harmful action
     if "how to" in text and any(word in text for word in [
-        "kill", "eliminate", "remove", "neutralize", "destroy"
+        "kill", "eliminate", "remove", "neutralize", "destroy",
+        "hack", "cheat", "copy", "bypass", "manipulat"
     ]):
         return True
 
@@ -84,7 +92,7 @@ def is_harmful_input(text: str) -> bool:
     # 3. Additional intent phrases
     # --------------------------------------------
     if "ways to" in text and any(word in text for word in [
-        "kill", "eliminate", "remove", "neutralize"
+        "kill", "eliminate", "remove", "neutralize", "hack", "cheat", "copy", "bypass"
     ]):
         return True
 
