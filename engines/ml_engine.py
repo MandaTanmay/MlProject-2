@@ -30,6 +30,34 @@ class MLEngine:
     def execute(self, query: str, features: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute numerical computation.
+        Args:
+            query: User query
+            features: Features from input analyzer
+        Returns:
+            Dictionary with answer, confidence, strategy
+        """
+        query_lower = features.get("lowercase_text", query.lower())
+
+        # Try direct math expression evaluation first
+        math_expr = re.sub(r'[^0-9\+\-\*/\.\(\) ]', '', query_lower)
+        direct_result = self.compute_expression(math_expr)
+        if direct_result is not None:
+            self.computation_history.append({
+                "query": query,
+                "result": direct_result,
+                "type": "direct_expression"
+            })
+            return {
+                "answer": f"The answer is {direct_result}",
+                "confidence": 1.0,
+                "strategy": "ML",
+                "computation_type": "direct_expression",
+                "reason": "Direct math expression evaluation"
+            }
+
+        # ...existing code...
+        """
+        Execute numerical computation.
         
         Args:
             query: User query
