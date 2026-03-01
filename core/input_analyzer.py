@@ -55,12 +55,20 @@ class InputAnalyzer:
         has_question_words = any(word in lowercase for word in question_words)
         
         # Classify question type
+        # Classify question type
         question_type = None
 
+        # Numeric detection
         if has_math_operators and has_digits:
             question_type = "NUMERIC"
+        
+        # Percent-based numeric detection
+        elif "percent" in lowercase or "%" in lowercase:
+            question_type = "NUMERIC"
+        
         elif 'why' in lowercase or 'how' in lowercase or 'explain' in lowercase or 'describe' in lowercase:
             question_type = "EXPLANATION"
+        
         elif 'what' in lowercase or 'which' in lowercase or 'who' in lowercase or 'when' in lowercase:
             question_type = "FACTUAL"
 

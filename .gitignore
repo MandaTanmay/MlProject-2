@@ -1,9 +1,53 @@
+# -----------------------------
+# Python
+# -----------------------------
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
+*.sqlite3
+
+# -----------------------------
+# Virtual environments
+# -----------------------------
+venv/
+env/
 tf_env/
-base_env/
-.cache/
+
+# -----------------------------
+# VS Code
+# -----------------------------
+.vscode/
+
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+
+# -----------------------------
+# Databases
+# -----------------------------
 feedback/feedback.db
+feedback/*.db
+feedback/*.json
+feedback/*.csv
+
+# -----------------------------
+# Trained Models (DO NOT VERSION)
+# -----------------------------
+training/models/*.joblib
+training/models/*_v*.joblib
+
+# Keep only registry metadata
+!training/models/model_registry.json
+
+# -----------------------------
+# Auto-generated files
+# -----------------------------
+FULL_PROJECT_SOURCE.md
+ex.py
+
+# -----------------------------
+# OS files
+# -----------------------------
+.DS_Store
