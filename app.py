@@ -22,8 +22,13 @@ import sqlite3
 from pathlib import Path
 from collections import defaultdict
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+# Allow optionally passing OUTSIDE-domain queries through the orchestration pipeline.
+# Default: False. Can be enabled by setting environment variable `ALLOW_OUTSIDE_ROUTING=true`.
+ALLOW_OUTSIDE_ROUTING = os.environ.get("ALLOW_OUTSIDE_ROUTING", "false").lower() in ("1", "true", "yes")
 
 # Import core components
 from core.domain_classifier import DomainClassifier
@@ -193,6 +198,7 @@ async def health_full():
             "loaded": transformer_engine.is_loaded,
             "model": getattr(transformer_engine, "model_name", "unknown")
         },
+        "allow_outside_routing": ALLOW_OUTSIDE_ROUTING,
         "phi2_explanation_engine": {
             "loaded": phi2_explanation_engine.is_loaded,
             "model": phi2_explanation_engine.model_name,
@@ -256,18 +262,40 @@ async def process_query(request: QueryRequest):
         # STEP 2: Domain Classification
         # ------------------------------------------------
         domain, dom_conf = domain_classifier.predict(query)
-        
+        bypassed_domain_filter = False
+
         if domain == "OUTSIDE":
-            return QueryResponse(
-                answer=domain_classifier.get_refusal_message(),
-                strategy="DOMAIN_FILTER",
-                confidence=dom_conf,
-                reason="Query is not related to the academic student domain.",
-                metadata={
-                    "domain": domain,
-                    "domain_confidence": dom_conf
-                }
-            )
+            if not ALLOW_OUTSIDE_ROUTING:
+                return QueryResponse(
+                    answer=domain_classifier.get_refusal_message(),
+                    strategy="DOMAIN_FILTER",
+                    confidence=dom_conf,
+                    reason="Query is not related to the academic student domain.",
+                    metadata={
+                        "domain": domain,
+                        "domain_confidence": dom_conf
+                    }
+                )
+            else:
+                # Allow OUTSIDE queries to continue through orchestration when explicitly enabled.
+                # However, run an extra safety check to ensure harmful OUTSIDE queries are still blocked.
+                bypassed_domain_filter = True
+                logger.info("ALLOW_OUTSIDE_ROUTING enabled: proceeding with OUTSIDE-domain query through orchestration")
+                from core.safety import is_harmful_input as _is_harmful
+                if _is_harmful(query):
+                    logger.warning("Blocked OUTSIDE-domain query by safety check after bypass")
+                    return QueryResponse(
+                        answer="I'm not able to assist with harmful or dangerous requests.",
+                        strategy="SAFETY",
+                        confidence=1.0,
+                        reason="Blocked by safety layer after domain bypass.",
+                        metadata={
+                            "domain": domain,
+                            "domain_confidence": dom_conf,
+                            "bypassed_domain_filter": True,
+                            "unsafe_block": True
+                        }
+                    )
         # ------------------------------------------------
         # STEP 3: Feature Extraction
         # ------------------------------------------------
@@ -413,7 +441,10 @@ async def process_query(request: QueryRequest):
                 "classification_time_ms": orchestration_plan["metadata"].get("classification_time_ms"),
                 "validation": validation_details,
                 "source": result.get("source"),
-                "computation_type": result.get("computation_type")
+                "computation_type": result.get("computation_type"),
+                "domain": domain,
+                "domain_confidence": dom_conf,
+                "bypassed_domain_filter": bypassed_domain_filter
             }
         )
     except HTTPException:

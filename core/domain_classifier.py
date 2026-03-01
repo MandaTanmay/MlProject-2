@@ -43,9 +43,59 @@ class DomainClassifier:
         self.is_loaded = False
         self._kb = None
         self._kb_tokens = set()
+        self._kb_token_list = []
+        self._word_re = re.compile(r"\w+")
+        self._numeric_re = re.compile(r'^[\d\s\+\-\*\/\^\.\%\(\)]+$')
+        # Precompute keyword sets for fast membership checks
+        self.srkr_keywords = set([
+            'srkr', 'b.tech', 'btech', 'jntuk', 'naac', 'aicte', 
+            'r23', 'regulation', 'credits', 'cgpa', 'gpa', 'semester',
+            'attendance', 'grading', 'evaluation', 'internship', 'project',
+            'elective', 'mooc', 'honours', 'honors', 'minor', 'induction',
+            'pass marks', 'revaluation', 'malpractice', 'promotion',
+            'medium of instruction', 'programme duration', 'credit transfer'
+        ])
+        self.fuzzy_keywords = [
+            'quantum', 'quantum computing', 'machine learning', 'artificial intelligence',
+            'algorithm', 'mathematics', 'physics', 'chemistry', 'biology', 'computer', 'programming'
+        ]
         
         # Try to load trained models
         self.load_models()
+        # Load KB and build cached token sets to avoid doing this on every predict call
+        try:
+            self._load_kb()
+        except Exception:
+            # Keep it safe; KB is optional
+            pass
+
+    def _load_kb(self):
+        """
+        Load knowledge base and build token sets / lists used for fast matching and fuzzy lookup.
+        """
+        kb_path = Path(__file__).parent.parent / "data" / "knowledge_base.json"
+        if kb_path.exists():
+            with open(kb_path, "r", encoding="utf-8") as f:
+                self._kb = json.load(f)
+        else:
+            self._kb = {"facts": []}
+
+        if not self._kb_tokens:
+            for fact in self._kb.get("facts", []):
+                for field in ("entity", "question", "id"):
+                    val = fact.get(field, "")
+                    if not val:
+                        continue
+                    val_l = val.lower()
+                    # add full phrase
+                    self._kb_tokens.add(val_l)
+                    # add individual tokens
+                    for tok in self._word_re.findall(val_l):
+                        if len(tok) > 1:
+                            self._kb_tokens.add(tok)
+
+            # also prepare list for difflib fuzzy matching (stable order)
+            self._kb_token_list = list(self._kb_tokens)
     
     def load_models(self) -> bool:
         """
@@ -84,77 +134,43 @@ class DomainClassifier:
         Returns:
             Tuple of (domain, confidence_score)
         """
-        # SRKR whitelist - always classify as STUDENT with high confidence
         query_lower = query.lower()
 
         # Quick KB lookup: accept short/simple queries that match knowledge base
-        try:
-            if self._kb is None:
-                kb_path = Path(__file__).parent.parent / "data" / "knowledge_base.json"
-                if kb_path.exists():
-                    with open(kb_path, "r", encoding="utf-8") as f:
-                        self._kb = json.load(f)
-                else:
-                    self._kb = {"facts": []}
-            # Build a token/alias set from KB (cache)
-            if not self._kb_tokens:
-                for fact in self._kb.get("facts", []):
-                    for field in ("entity", "question", "id"):
-                        val = fact.get(field, "")
-                        if not val:
-                            continue
-                        val_l = val.lower()
-                        # add full phrase
-                        self._kb_tokens.add(val_l)
-                        # add individual tokens
-                        for tok in re.findall(r"\w+", val_l):
-                            if len(tok) > 1:
-                                self._kb_tokens.add(tok)
-
-            # If query is a short token or phrase, check KB tokens/aliases
-            if len(query.strip()) <= 30:
-                qtok = query_lower.strip()
-                # direct or substring match against KB phrases
-                if qtok in self._kb_tokens:
+        q_stripped = query_lower.strip()
+        if len(q_stripped) <= 30 and self._kb_tokens:
+            # exact token or phrase match
+            if q_stripped in self._kb_tokens:
+                return "STUDENT", 0.95
+            # substring containment checks (favor exact match first)
+            for phrase in self._kb_token_list:
+                if q_stripped == phrase or q_stripped in phrase or phrase in q_stripped:
                     return "STUDENT", 0.95
-                for phrase in self._kb_tokens:
-                    if qtok == phrase or qtok in phrase or phrase in qtok:
-                        return "STUDENT", 0.95
-                # fuzzy match on tokens
-                try:
-                    match = difflib.get_close_matches(qtok, list(self._kb_tokens), n=1, cutoff=0.78)
-                    if match:
-                        return "STUDENT", 0.9
-                except Exception:
-                    pass
-        except Exception:
-            # don't fail noisy KB checks
-            pass
-        srkr_keywords = [
-            'srkr', 'b.tech', 'btech', 'jntuk', 'naac', 'aicte', 
-            'r23', 'regulation', 'credits', 'cgpa', 'gpa', 'semester',
-            'attendance', 'grading', 'evaluation', 'internship', 'project',
-            'elective', 'mooc', 'honours', 'honors', 'minor', 'induction',
-            'pass marks', 'revaluation', 'malpractice', 'promotion',
-            'medium of instruction', 'programme duration', 'credit transfer'
-        ]
-        if any(kw in query_lower for kw in srkr_keywords):
+            # fuzzy match using prebuilt list
+            try:
+                match = difflib.get_close_matches(q_stripped, self._kb_token_list, n=1, cutoff=0.78)
+                if match:
+                    return "STUDENT", 0.90
+            except Exception:
+                pass
+
+        # SRKR / academic keyword quick checks (substring-based for short strings)
+        if any(kw in query_lower for kw in self.srkr_keywords):
             return "STUDENT", 0.95
 
         # Quick numeric/arithmetic detection: allow standalone math expressions
-        if re.match(r'^[\d\s\+\-\*\/\^\.\%\(\)]+$', query.strip()):
+        if self._numeric_re.match(query.strip()):
             return "STUDENT", 0.99
 
-        # Fuzzy keyword check: catch common academic keywords even if misspelled
-        fuzzy_keywords = [
-            'quantum', 'quantum computing', 'machine learning', 'artificial intelligence',
-            'algorithm', 'mathematics', 'physics', 'chemistry', 'biology', 'computer', 'programming'
-        ]
-        tokens = re.findall(r"\w+", query_lower)
+        # Fuzzy keyword check: catch academic keywords even if slightly misspelled
+        tokens = self._word_re.findall(query_lower)
         for tok in tokens:
-            match = difflib.get_close_matches(tok, fuzzy_keywords, n=1, cutoff=0.8)
-            if match:
-                return "STUDENT", 0.9
+            try:
+                match = difflib.get_close_matches(tok, self.fuzzy_keywords, n=1, cutoff=0.8)
+                if match:
+                    return "STUDENT", 0.90
+            except Exception:
+                continue
         
         if not self.is_loaded:
             # Fallback to rule-based classification
