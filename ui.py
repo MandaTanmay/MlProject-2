@@ -1,366 +1,316 @@
-"""
-Meta-Learning AI System - ChatGPT-like Interface
-Clean, modern chat interface matching ChatGPT's exact layout and functionality.
-"""
+
 import streamlit as st
+st.set_page_config(page_title="Meta-Learning Academic AI", layout="wide", page_icon="🧠")
+
 import requests
 import json
 from datetime import datetime
 import uuid
 
-# Page configuration
-st.set_page_config(
-    page_title="Meta-Learning AI",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # API endpoint
 API_URL = "http://localhost:8001"
 
-# Clean ChatGPT-style CSS
+# Custom CSS for ChatGPT/Gemini look
 st.markdown("""
 <style>
-    /* Import Inter font */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Remove Streamlit branding and padding */
-    .stApp > header {visibility: hidden;}
-    .stApp > div > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) {visibility: hidden;}
-    .stDeployButton {display: none;}
-    footer {visibility: hidden;}
-    .stActionButton {display: none;}
-    
-    /* Remove default margins and ensure full height */
-    html, body {
-        margin: 0;
-        padding: 0;
-        height: 100vh;
-        overflow: hidden;
-    }
-    
-    /* Streamlit main container fixes */
-    .main {
-        padding: 0 !important;
-        height: 100vh;
-        overflow: hidden;
-    }
-    
-    /* Fix initial scroll position */
-    .stApp {
-        scroll-behavior: smooth;
-        scroll-padding-top: 0;
-    }
-    
-    /* Ensure content starts at top */
-    .main-content {
-        scroll-snap-align: start;
-    }
-    
-    /* Main app container */
-    .main .block-container {
-        padding-top: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
-        padding-bottom: 0rem !important;
-        margin-top: 0rem !important;
-        max-width: none;
-        height: 100vh;
-        overflow: hidden;
-        position: relative;
-    }
-    
-    /* Global font */
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    
-    /* Dark theme - Full viewport */
-    .stApp {
-        background-color: #0D1117;
-        color: #E6EDF3;
-        height: 100vh;
-        overflow: hidden;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background-color: #161B22;
-        border-right: 1px solid #30363D;
-        height: 100vh;
-        overflow-y: auto;
-    }
-    
-    /* Main content area - Full height, scrollable */
-    .main-content {
-        background-color: #0D1117;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-    }
-    
-    /* Messages area - Scrollable */
-    .messages-area {
-        flex: 1;
-        overflow-y: auto;
-        padding-bottom: 140px; /* Space for input */
-        padding-top: 0rem !important; /* Remove top padding */
-        margin-top: 0rem !important; /* Ensure no top margin */
-        position: relative;
-        top: 0;
-    }
-    
-    /* Welcome/Start screen - Fit in viewport */
-    .welcome-container {
-        max-width: 768px;
-        margin: 0 auto;
-        padding: 0.5rem 1rem; /* Minimal top padding */
-        text-align: center;
-    }
-    
-    .welcome-title {
-        font-size: 1.8rem; /* Slightly smaller */
-        font-weight: 600;
-        margin-bottom: 0.8rem; /* Reduced margin */
-        margin-top: 0 !important; /* No top margin */
-        background: linear-gradient(135deg, #58A6FF 0%, #79C0FF 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        text-align: center;
-    }
-    
-    .welcome-subtitle {
-        font-size: 0.95rem; /* Slightly smaller */
-        color: #8B949E;
-        margin-bottom: 1.5rem; /* Reduced margin */
-        max-width: 600px;
-        line-height: 1.5; /* Tighter line height */
-        margin-left: auto;
-        margin-right: auto;
-    }
-    
-    /* Example buttons styling */
-    .stButton > button {
-        background: #161B22 !important;
-        color: #E6EDF3 !important;
-        border: 1px solid #21262D !important;
-        border-radius: 0.75rem !important;
-        font-weight: 400 !important;
-        transition: all 0.2s !important;
-        text-align: left !important;
-        padding: 0.8rem !important; /* Reduced padding */
-        height: auto !important;
-        white-space: normal !important;
-        min-height: 55px !important; /* Reduced min height */
-        margin-bottom: 0.4rem !important; /* Reduced margin */
-    }
-    
-    .stButton > button:hover {
-        background: #21262D !important;
-        border-color: #30363D !important;
-        transform: translateY(-1px) !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
-    }
-    
-    /* Primary buttons (New Chat, Send) */
-    .stButton[data-baseweb="button"][kind="primary"] > button {
-        background: #238636 !important;
-        border-color: #238636 !important;
-        color: white !important;
-    }
-    
-    .stButton[data-baseweb="button"][kind="primary"] > button:hover {
-        background: #2EA043 !important;
-        border-color: #2EA043 !important;
-    }
-    
-    /* Message containers */
-    .message-container {
-        max-width: 768px;
-        margin: 0 auto;
-        padding: 1.5rem 1rem;
-        border-bottom: 1px solid #21262D;
-    }
-    
-    .user-message {
-        background-color: #0D1117;
-    }
-    
-    .ai-message {
-        background-color: #0D1117;
-    }
-    
-    .message-header {
-        display: flex;
-        align-items: center;
-        margin-bottom: 0.75rem;
-        font-weight: 600;
-        font-size: 0.9rem;
-    }
-    
-    .user-avatar {
-        background: #238636;
-        color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 0.75rem;
-        font-size: 14px;
-    }
-    
-    .ai-avatar {
-        background: #58A6FF;
-        color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 0.75rem;
-        font-size: 14px;
-    }
-    
-    .message-content {
-        margin-left: 36px;
-        color: #E6EDF3;
-        font-size: 16px;
-        line-height: 1.6;
-    }
-    
-    .strategy-badge {
-        display: inline-block;
-        padding: 0.25rem 0.5rem;
-        background: rgba(88, 166, 255, 0.15);
-        color: #58A6FF;
-        border-radius: 0.375rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin-bottom: 0.75rem;
-        border: 1px solid rgba(88, 166, 255, 0.3);
-    }
-    
-    .metadata-box {
-        margin-top: 1rem;
-        padding: 0.75rem;
-        background: #161B22;
-        border: 1px solid #21262D;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-    }
-    
-    .confidence-bar {
-        background: #21262D;
-        height: 4px;
-        border-radius: 2px;
-        margin: 0.5rem 0;
-        overflow: hidden;
-    }
-    
-    .confidence-fill {
-        background: #238636;
-        height: 100%;
-        transition: width 0.3s ease;
-    }
-    
-    /* Input section - Fixed at bottom */
-    .input-container {
-        position: fixed;
-        bottom: 0;
-        left: 260px; /* Account for sidebar */
-        right: 0;
-        background: #0D1117;
-        border-top: 1px solid #21262D;
-        padding: 0.8rem; /* Reduced padding */
-        z-index: 1000;
-    }
-    
-    .input-wrapper {
-        max-width: 768px;
-        margin: 0 auto;
-        position: relative;
-    }
-    
-    /* Responsive input on mobile */
-    @media (max-width: 768px) {
-        .input-container {
-            left: 0; /* Full width on mobile */
-        }
-        
-        .messages-area {
-            padding-bottom: 120px; /* Less space on mobile */
-        }
-    }
-    
-    /* Sidebar buttons */
-    .sidebar-button {
-        width: 100%;
-        padding: 0.75rem;
-        margin-bottom: 0.5rem;
-        background: #21262D;
-        border: 1px solid #30363D;
-        border-radius: 0.5rem;
-        color: #E6EDF3;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-size: 0.875rem;
-        text-align: left;
-    }
-    
-    .sidebar-button:hover {
-        background: #30363D;
-        border-color: #484F58;
-    }
-    
-    .new-chat-button {
-        background: #238636;
-        border-color: #238636;
-        font-weight: 500;
-        text-align: center;
-    }
-    
-    .new-chat-button:hover {
-        background: #2EA043;
-        border-color: #2EA043;
-    }
-    
-    /* Example prompt buttons */
-    .example-button {
-        width: 100%;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        background: #161B22;
-        border: 1px solid #21262D;
-        border-radius: 0.75rem;
-        color: #E6EDF3;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: left;
-    }
-    
-    .example-button:hover {
-        background: #21262D;
-        border-color: #30363D;
-    }
-    
-    .example-title {
-        font-weight: 500;
-        margin-bottom: 0.25rem;
-        color: #58A6FF;
-    }
-    
-    .example-text {
+body, html {
+    font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+    background: #18181b;
+    color: #e5e7eb;
+}
+.stApp {
+    background: #18181b;
+}
+.chat-window {
+    max-width: 600px;
+    margin: 40px auto 0 auto;
+    background: #23232a;
+    border-radius: 18px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.18);
+    padding: 0 0 80px 0;
+    min-height: 70vh;
+}
+.message-bubble {
+    display: flex;
+    align-items: flex-start;
+    margin: 18px 0;
+}
+.bubble-user {
+    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+
+
+# --- BACKEND API INTEGRATION ---
+import requests
+API_BASE = "http://localhost:8001/api"
+
+def get_query_history():
+    try:
+        return requests.get(f"{API_BASE}/history").json()
+    except Exception as e:
+        st.error(f"Query history API error: {e}")
+        return []
+
+def get_routing_stats():
+    try:
+        return requests.get(f"{API_BASE}/stats").json()
+    except Exception as e:
+        st.error(f"Routing stats API error: {e}")
+        return {"total":0,"multi_intent":0,"unsafe_blocks":0,"avg_response_ms":0}
+
+def get_model_info():
+    try:
+        return requests.get(f"{API_BASE}/model_info").json()
+    except Exception as e:
+        st.error(f"Model info API error: {e}")
+        return {"model_version":"-","embedding_model":"-","transformer_model":"-","last_retrained":"-","intent_threshold":0,"unsafe_threshold":0,"system_status":"error"}
+
+def submit_query(query):
+    try:
+        return requests.post(f"{API_BASE}/query", json={"query": query}).json()
+    except Exception as e:
+        st.error(f"Query API error: {e}")
+        return None
+
+# --- FETCH DYNAMIC DATA ---
+model_info = get_model_info()
+model_version = model_info.get("model_version", "-")
+embedding_model = model_info.get("embedding_model", "-")
+transformer_model = model_info.get("transformer_model", "-")
+system_status = model_info.get("system_status", "error")
+last_retrained = model_info.get("last_retrained", "-")
+intent_threshold = model_info.get("intent_threshold", 0)
+unsafe_threshold = model_info.get("unsafe_threshold", 0)
+
+query_history = get_query_history()
+routing_stats = get_routing_stats()
+
+# --- HEADER ---
+with st.container():
+    cols = st.columns([1, 3, 2])
+    with cols[0]:
+        st.image("https://img.icons8.com/fluency/96/brain.png", width=48)
+    with cols[1]:
+        st.title("Meta-Learning Academic AI")
+        st.subheader("Multi-Intent Deterministic Orchestration System")
+    with cols[2]:
+        status_color = {"ready": "🟢", "retraining": "🟡", "error": "🔴"}[system_status]
+        st.markdown(f"**System Status:** {status_color} {system_status.capitalize()}")
+        st.markdown(f"**Model Version:** `{model_version}`")
+        st.markdown(f"**Embedding Model:** `{embedding_model}`")
+        st.markdown(f"**Transformer Model:** `{transformer_model}`")
+
+st.markdown("---")
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("Query History")
+    for q in query_history[-10:]:
+        chain_icons = " → ".join([f":blue_circle:" if e != "RULE" else ":red_circle:" for e in q["chain"]])
+        unsafe_badge = "🚫" if q["unsafe"] else ""
+        if st.button(f"{q['query']} {unsafe_badge}", key=q['query']):
+            st.session_state.selected_query = q['query']
+    st.markdown("---")
+    st.header("Routing Statistics")
+    st.metric("Total Queries", routing_stats["total"])
+    st.metric("Multi-Intent %", f"{routing_stats['multi_intent']}%")
+    st.metric("Unsafe Blocks", routing_stats["unsafe_blocks"])
+    st.metric("Avg Response Time (ms)", routing_stats["avg_response_ms"])
+    st.markdown("---")
+    st.header("Model Info")
+    st.metric("Intent Threshold", intent_threshold)
+    st.metric("Unsafe Threshold", unsafe_threshold)
+    st.metric("Last Retrained", last_retrained)
+
+# --- MAIN INPUT SECTION ---
+
+with st.container():
+    st.markdown("### Academic Query")
+    query = st.text_area("Enter your academic question", value=st.session_state.get("selected_query", ""), key="query_input")
+    cols = st.columns([1, 1])
+    submit = cols[0].button("🔍 Submit")
+    clear = cols[1].button("❌ Clear")
+    if clear:
+        st.session_state.query_input = ""
+        st.session_state.selected_query = ""
+        st.session_state.last_result = None
+        st.experimental_rerun()
+    if submit:
+        with st.spinner("Processing..."):
+            result_struct = submit_query(query)
+            if result_struct:
+                st.session_state.last_result = result_struct
+                st.session_state.selected_query = query
+                st.experimental_rerun()
+
+# --- RESPONSE DISPLAY SECTION ---
+if "last_result" in st.session_state:
+    result = st.session_state.last_result
+
+    # --- PANEL A: FINAL ANSWER ---
+    with st.container():
+        st.markdown("## 🧠 Final Answer")
+        if "UNSAFE" in result["intents"]["active_intents"]:
+            st.error("Query blocked by Rule Engine.")
+        elif result["result"]["confidence"] < 0.5:
+            st.info("Low confidence result.")
+        elif len(result["intents"]["active_intents"]) > 1:
+            st.warning("Ambiguous multi-intent routing.")
+        else:
+            st.success(result["result"]["answer"])
+        st.markdown(f"**Explanation:** {result['execution_plan']['chain_reasoning']}")
+        if isinstance(result["result"]["answer"], (int, float)):
+            st.metric("Numeric Result", result["result"]["answer"])
+        st.markdown("---")
+
+    # --- PANEL B: INTENT ANALYSIS ---
+    with st.expander("Intent Analysis"):
+        scores = result["intents"]["all_scores"]
+        active_intents = set(result["intents"].get("active_intents", []))
+        # Only show scores for active intents
+        filtered_scores = [(intent, score) for intent, score in scores.items() if intent in active_intents]
+        if filtered_scores:
+            df = pd.DataFrame(filtered_scores, columns=["Intent", "Score"])
+            st.dataframe(df.style.highlight_max(axis=0, subset=["Score"], color="lightgreen"), use_container_width=True)
+        else:
+            st.info("No relevant intent scores for this query.")
+        st.markdown(f"**Active Intents:** {', '.join(result['intents']['active_intents'])}")
+        st.markdown(f"**Threshold Used:** {result['intents']['threshold_used']}")
+        st.markdown(f"**Primary Intent:** {result['intents']['sorted_intents'][0]}")
+
+    # --- PANEL C: EXECUTION PLAN ---
+    with st.expander("Execution Plan"):
+        chain = result["execution_plan"]["engine_chain"]
+        chain_str = " → ".join(chain)
+        st.markdown(f"**Engine Chain:** {chain_str}")
+        st.markdown(f"**Chain Reasoning:** {result['execution_plan']['chain_reasoning']}")
+        st.markdown(f"**Number of Engines Used:** {result['execution_plan']['num_engines']}")
+
+    # --- PANEL D: PERFORMANCE METRICS ---
+    with st.expander("Performance Metrics"):
+        st.metric("Classification Time (ms)", result["metadata"]["classification_time_ms"])
+        st.metric("Confidence", result["result"]["confidence"])
+        st.metric("Model Used", model_version)
+        st.metric("Timestamp", result["metadata"]["timestamp"])
+
+    # --- PANEL E: SAFETY BLOCK (If Applicable) ---
+    if "UNSAFE" in result["intents"]["active_intents"]:
+        with st.container():
+            st.error("🚨 Query blocked by Rule Engine.")
+            st.markdown("**Category:** UNSAFE")
+            st.markdown(f"**Confidence:** {scores['UNSAFE']}")
+            st.markdown("**Logged:** Yes")
+
+    # --- EXECUTION FLOW VISUALIZATION ---
+    st.markdown("### Execution Flow")
+    flow_steps = ["Semantic Classification", "Execution Planner"] + chain + ["Validation"]
+    flow_cols = st.columns(len(flow_steps))
+    for i, step in enumerate(flow_steps):
+        with flow_cols[i]:
+            st.markdown(f"**{step}**")
+            st.markdown(":arrow_down:" if i < len(flow_steps)-1 else "")
+
+    # --- RETRAINING NOTIFICATION ---
+    if result["status"] == "ready":
+        st.markdown("<span style='color:green; font-size:0.9rem;'>Query stored for automatic retraining.</span>", unsafe_allow_html=True)
+    # Optional: Admin mode toggle
+    if st.checkbox("Admin Mode"):
+        st.markdown("#### Retraining Logs")
+        st.info("Model retrained on 2026-02-28. No errors detected.")
+    # Minimal sidebar (collapsed by default)
+    with st.sidebar:
+        st.markdown("<div style='padding: 1rem 0; text-align:center;'><span style='font-size:2rem;'>🧠</span><br><b>Meta-Learning AI</b></div>", unsafe_allow_html=True)
+        if st.button("➕ New chat", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.current_session = str(uuid.uuid4())
+            st.rerun()
+        st.markdown("---")
+        st.markdown("<small style='color:#8B949E;'>Inspired by ChatGPT & Gemini</small>", unsafe_allow_html=True)
+
+    # Chat header
+    st.markdown("<div class='chat-header'>Meta-Learning AI</div>", unsafe_allow_html=True)
+    st.markdown("<div class='chat-subtitle'>Advanced AI orchestration. Ask anything!</div>", unsafe_allow_html=True)
+
+    # Example questions (like ChatGPT/Gemini)
+    if not st.session_state.messages:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📚 **Factual Query** What is the minimum attendance requirement?", use_container_width=True):
+                st.session_state.input_text = "What is the minimum attendance requirement?"
+                st.experimental_rerun()
+        with col2:
+            if st.button("🔢 **Numeric Calculation** Calculate 25 * 16 + 144", use_container_width=True):
+                st.session_state.input_text = "Calculate 25 * 16 + 144"
+                st.experimental_rerun()
+        col3, col4 = st.columns(2)
+        with col3:
+            if st.button("💡 **Explanation Request** Explain how meta-learning works", use_container_width=True):
+                st.session_state.input_text = "Explain how meta-learning works"
+                st.experimental_rerun()
+        with col4:
+            if st.button("🎯 **System Inquiry** What are the benefits of AI orchestration?", use_container_width=True):
+                st.session_state.input_text = "What are the benefits of AI orchestration?"
+                st.experimental_rerun()
+        st.markdown("<div style='text-align:center; color:#8B949E; margin-top:60px;'>Start a new conversation. Your messages will appear here.</div>", unsafe_allow_html=True)
+    else:
+        for msg in st.session_state.messages:
+            role = msg["role"]
+            content = msg["content"]
+            if role == "user":
+                st.markdown(f"<div class='message-bubble' style='justify-content:flex-end;'><div class='bubble-user'>{content}</div><div class='avatar avatar-user'>U</div></div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div class='message-bubble' style='justify-content:flex-start;'><div class='avatar avatar-ai'>AI</div><div class='bubble-ai'>{content}</div></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Floating input area
+    st.markdown("<div class='input-floating'>", unsafe_allow_html=True)
+    st.markdown("<div class='input-inner'>", unsafe_allow_html=True)
+    user_input = st.text_input("", value=st.session_state.get("input_text", ""), max_chars=2000, placeholder="Type your message and press Enter...", key="input_box", label_visibility="collapsed")
+    send_clicked = st.button("Send", key="send_btn", help="Send message", use_container_width=False)
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Handle API status
+    api_healthy = check_api_health()
+    if not api_healthy:
+        st.error("🚨 **API Server Offline** - Please start the FastAPI server: `python app.py`")
+        st.stop()
+
+    # Handle pending query from example buttons
+    pending_query = st.session_state.get("pending_query", "")
+    if "pending_query" in st.session_state:
+        del st.session_state.pending_query
+    if user_input:
+        st.session_state.input_text = user_input
+
+    # Process message ONLY when Send button is clicked
+    if send_clicked and user_input and user_input.strip():
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_input.strip()
+        })
+        st.session_state.pending_ai_query = user_input.strip()
+        st.session_state.input_text = ""
+        st.rerun()
+
+    # Process AI response if we have a pending query
+    if "pending_ai_query" in st.session_state:
+        query = st.session_state.pending_ai_query
+        del st.session_state.pending_ai_query
+        with st.spinner("🤔 Thinking..."):
+            result, error = send_query(query)
+        if error:
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": f"❌ **Error:** {error}"
+            })
+        elif result:
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": result
+            })
+        session_id = st.session_state.current_session
+        st.session_state.chat_sessions[session_id] = st.session_state.messages.copy()
+        st.rerun()
         font-size: 0.875rem;
         color: #8B949E;
     }
@@ -743,6 +693,23 @@ def main():
             st.markdown("API Endpoint: `localhost:8001`")
             if st.button("🔄 Refresh API Status"):
                 st.rerun()
+
+                # Retrain Models from Feedback Button
+                st.markdown("---")
+                if st.button("🧠 Retrain Models from Feedback", help="Retrain domain and engine-selector models using collected user feedback."):
+                    import subprocess
+                    with st.spinner("Retraining models from feedback..."):
+                        try:
+                            result = subprocess.run([
+                                "python", "training/retrain_from_feedback.py"
+                            ], capture_output=True, text=True, timeout=120)
+                            if result.returncode == 0:
+                                st.success("✅ Models retrained successfully from feedback!")
+                                st.text(result.stdout)
+                            else:
+                                st.error(f"❌ Retraining failed: {result.stderr}")
+                        except Exception as e:
+                            st.error(f"❌ Error during retraining: {str(e)}")
         
         st.markdown('</div>', unsafe_allow_html=True)
     
