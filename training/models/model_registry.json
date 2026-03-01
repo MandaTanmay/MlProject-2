@@ -24,14 +24,14 @@
     },
     "engine_selector": {
       "model_name": "engine_selector",
-      "version": 4,
-      "timestamp": "2026-03-01T18:50:38.523927",
-      "versioned_file": "engine_selector_v4_2026_03_01_185038.joblib",
+      "version": 5,
+      "timestamp": "2026-03-01T20:01:39.741396",
+      "versioned_file": "engine_selector_v5_2026_03_01_200139.joblib",
       "canonical_file": "engine_selector.joblib",
       "metadata": {
         "model_type": "Random Forest",
         "test_accuracy": 1.0,
-        "training_samples": 281,
+        "training_samples": 280,
         "n_estimators": 100
       }
     },
@@ -292,6 +292,19 @@
         "model_type": "Random Forest",
         "test_accuracy": 1.0,
         "training_samples": 281,
+        "n_estimators": 100
+      }
+    },
+    {
+      "model_name": "engine_selector",
+      "version": 5,
+      "timestamp": "2026-03-01T20:01:39.741396",
+      "versioned_file": "engine_selector_v5_2026_03_01_200139.joblib",
+      "canonical_file": "engine_selector.joblib",
+      "metadata": {
+        "model_type": "Random Forest",
+        "test_accuracy": 1.0,
+        "training_samples": 280,
         "n_estimators": 100
       }
     }

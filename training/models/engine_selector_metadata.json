@@ -4,8 +4,8 @@
   "test_accuracy": 1.0,
   "cv_mean": 1.0,
   "cv_std": 0.0,
-  "training_samples": 281,
-  "test_samples": 71,
+  "training_samples": 280,
+  "test_samples": 70,
   "features": [
     "intent_FACTUAL",
     "intent_NUMERIC",

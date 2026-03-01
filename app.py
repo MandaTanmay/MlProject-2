@@ -325,6 +325,8 @@ async def process_query(request: QueryRequest):
         # ------------------------------------------------
         # Uses semantic similarity to determine active intents and execution chain
         orchestration_plan = meta_controller.orchestrate(query, features)
+        # Record whether domain filter was bypassed so logs/response reflect it
+        orchestration_plan.setdefault("metadata", {})["bypassed_domain_filter"] = bypassed_domain_filter
         # Store routing decision in database (Phase 7)
         is_blocked = orchestration_plan.get("status") == "blocked"
         feedback_store.store_routing_log(
@@ -446,11 +448,14 @@ async def process_query(request: QueryRequest):
         # ------------------------------------------------
         # STEP 7: Return Response
         # ------------------------------------------------
+        # If domain filter was bypassed, mark the overall strategy as OUTSIDE_ROUTING
+        out_strategy = "OUTSIDE_ROUTING" if bypassed_domain_filter else result["strategy"]
+
         return QueryResponse(
             answer=validated_answer,
-            strategy=result["strategy"],
+            strategy=out_strategy,
             confidence=result["confidence"],
-            reason=routing_reason,
+            reason=("Domain filter bypassed; proceeding with routing." if bypassed_domain_filter else routing_reason),
             metadata={
                 "intent": intent,
                 "intent_confidence": confidence,
