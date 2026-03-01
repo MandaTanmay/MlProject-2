@@ -4,6 +4,7 @@ st.set_page_config(page_title="Meta-Learning Academic AI", layout="wide", page_i
 
 import requests
 import json
+import os
 from datetime import datetime
 import uuid
 
@@ -100,6 +101,11 @@ with st.container():
         st.markdown(f"**Transformer Model:** `{transformer_model}`")
 
 st.markdown("---")
+
+# Show a banner if the backend is configured to allow OUTSIDE-domain routing
+ALLOW_OUTSIDE_ROUTING = os.environ.get("ALLOW_OUTSIDE_ROUTING", "false").lower() in ("1", "true", "yes")
+if ALLOW_OUTSIDE_ROUTING:
+    st.warning("⚠️ The backend is configured to allow non-academic (OUTSIDE) queries to be routed. Harmful queries are still blocked by safety checks.")
 
 # --- SIDEBAR ---
 with st.sidebar:
