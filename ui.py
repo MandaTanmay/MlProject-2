@@ -235,20 +235,21 @@ if "last_result" in st.session_state:
         col1, col2 = st.columns(2)
         with col1:
             if st.button("📚 **Factual Query** What is the minimum attendance requirement?", use_container_width=True):
-                st.session_state.input_text = "What is the minimum attendance requirement?"
+                # Set pending AI query so it is processed immediately
+                st.session_state.pending_ai_query = "What is the minimum attendance requirement?"
                 st.experimental_rerun()
         with col2:
             if st.button("🔢 **Numeric Calculation** Calculate 25 * 16 + 144", use_container_width=True):
-                st.session_state.input_text = "Calculate 25 * 16 + 144"
+                st.session_state.pending_ai_query = "Calculate 25 * 16 + 144"
                 st.experimental_rerun()
         col3, col4 = st.columns(2)
         with col3:
             if st.button("💡 **Explanation Request** Explain how meta-learning works", use_container_width=True):
-                st.session_state.input_text = "Explain how meta-learning works"
+                st.session_state.pending_ai_query = "Explain how meta-learning works"
                 st.experimental_rerun()
         with col4:
             if st.button("🎯 **System Inquiry** What are the benefits of AI orchestration?", use_container_width=True):
-                st.session_state.input_text = "What are the benefits of AI orchestration?"
+                st.session_state.pending_ai_query = "What are the benefits of AI orchestration?"
                 st.experimental_rerun()
         st.markdown("<div style='text-align:center; color:#8B949E; margin-top:60px;'>Start a new conversation. Your messages will appear here.</div>", unsafe_allow_html=True)
     else:
