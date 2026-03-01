@@ -56,9 +56,13 @@ tests/test_phi2_engine.py
 tests/test_rule_engine_v2.py
 tests/test_semantic_intent_classifier.py
 tests/test_system.py
+tests/tmp_api_query.py
+tests/tmp_domain_check.py
+tests/tmp_safety_check.py
 tests/validate_factual_engine_structure.py
 training/__init__.py
 training/models/domain_model_metadata.json
+training/models/engine_selector_metadata.json
 training/models/model_registry.json
 training/retrain_from_feedback.py
 training/train_all_models.py
@@ -3851,7 +3855,27 @@ async def process_query(request: QueryRequest):
                     "intent_confidence": 1.0
                 }
             )
+
+        # ------------------------------------------------
+        # STEP 2: NUMERIC FAST-PATH (Bypass Domain)
+        # ------------------------------------------------
+        features = input_analyzer.analyze(query)
+        print("NUMERIC FEATURES:", features)
+        if features.get("question_type") == "NUMERIC":
+            result = ml_engine.execute(query, features)
         
+            return QueryResponse(
+                answer=result["answer"],
+                strategy="ML",
+                confidence=result.get("confidence", 1.0),
+                reason="Numeric query detected - bypassed domain filter",
+                metadata={
+                    "intent": "NUMERIC",
+                    "intent_confidence": 1.0,
+                    "engine_chain": ["ML_ENGINE"]
+                }
+            )
+                
         # ------------------------------------------------
         # STEP 2: Domain Classification
         # ------------------------------------------------
@@ -4531,6 +4555,9 @@ from typing import Tuple
 from pathlib import Path
 import joblib
 import warnings
+import re
+import difflib
+import json
 
 warnings.filterwarnings('ignore')
 
@@ -4562,6 +4589,8 @@ class DomainClassifier:
         self.vectorizer = None
         self.classifier = None
         self.is_loaded = False
+        self._kb = None
+        self._kb_tokens = set()
         
         # Try to load trained models
         self.load_models()
@@ -4605,6 +4634,50 @@ class DomainClassifier:
         """
         # SRKR whitelist - always classify as STUDENT with high confidence
         query_lower = query.lower()
+
+        # Quick KB lookup: accept short/simple queries that match knowledge base
+        try:
+            if self._kb is None:
+                kb_path = Path(__file__).parent.parent / "data" / "knowledge_base.json"
+                if kb_path.exists():
+                    with open(kb_path, "r", encoding="utf-8") as f:
+                        self._kb = json.load(f)
+                else:
+                    self._kb = {"facts": []}
+            # Build a token/alias set from KB (cache)
+            if not self._kb_tokens:
+                for fact in self._kb.get("facts", []):
+                    for field in ("entity", "question", "id"):
+                        val = fact.get(field, "")
+                        if not val:
+                            continue
+                        val_l = val.lower()
+                        # add full phrase
+                        self._kb_tokens.add(val_l)
+                        # add individual tokens
+                        for tok in re.findall(r"\w+", val_l):
+                            if len(tok) > 1:
+                                self._kb_tokens.add(tok)
+
+            # If query is a short token or phrase, check KB tokens/aliases
+            if len(query.strip()) <= 30:
+                qtok = query_lower.strip()
+                # direct or substring match against KB phrases
+                if qtok in self._kb_tokens:
+                    return "STUDENT", 0.95
+                for phrase in self._kb_tokens:
+                    if qtok == phrase or qtok in phrase or phrase in qtok:
+                        return "STUDENT", 0.95
+                # fuzzy match on tokens
+                try:
+                    match = difflib.get_close_matches(qtok, list(self._kb_tokens), n=1, cutoff=0.78)
+                    if match:
+                        return "STUDENT", 0.9
+                except Exception:
+                    pass
+        except Exception:
+            # don't fail noisy KB checks
+            pass
         srkr_keywords = [
             'srkr', 'b.tech', 'btech', 'jntuk', 'naac', 'aicte', 
             'r23', 'regulation', 'credits', 'cgpa', 'gpa', 'semester',
@@ -4615,6 +4688,21 @@ class DomainClassifier:
         ]
         if any(kw in query_lower for kw in srkr_keywords):
             return "STUDENT", 0.95
+
+        # Quick numeric/arithmetic detection: allow standalone math expressions
+        if re.match(r'^[\d\s\+\-\*\/\^\.\%\(\)]+$', query.strip()):
+            return "STUDENT", 0.99
+
+        # Fuzzy keyword check: catch common academic keywords even if misspelled
+        fuzzy_keywords = [
+            'quantum', 'quantum computing', 'machine learning', 'artificial intelligence',
+            'algorithm', 'mathematics', 'physics', 'chemistry', 'biology', 'computer', 'programming'
+        ]
+        tokens = re.findall(r"\w+", query_lower)
+        for tok in tokens:
+            match = difflib.get_close_matches(tok, fuzzy_keywords, n=1, cutoff=0.8)
+            if match:
+                return "STUDENT", 0.9
         
         if not self.is_loaded:
             # Fallback to rule-based classification
@@ -4712,7 +4800,10 @@ class DomainClassifier:
         else:
             # Ambiguous - default to STUDENT domain with low confidence
             # (allows academic queries without specific keywords)
-            return "OUTSIDE", 0.6
+            # NOTE: previously returned OUTSIDE here which caused simple
+            # numeric/math queries (e.g. "2+2") to be blocked. Return
+            # STUDENT by default to align with the comment and intended behavior.
+            return "STUDENT", 0.6
     
     def get_refusal_message(self) -> str:
         """
@@ -4802,13 +4893,14 @@ class InputAnalyzer:
         
         # Classify question type
         question_type = None
-        if 'why' in lowercase or 'how' in lowercase or 'explain' in lowercase or 'describe' in lowercase:
+
+        if has_math_operators and has_digits:
+            question_type = "NUMERIC"
+        elif 'why' in lowercase or 'how' in lowercase or 'explain' in lowercase or 'describe' in lowercase:
             question_type = "EXPLANATION"
         elif 'what' in lowercase or 'which' in lowercase or 'who' in lowercase or 'when' in lowercase:
             question_type = "FACTUAL"
-        elif has_math_operators and has_digits:
-            question_type = "NUMERIC"
-        
+
         # Detect unsafe patterns
         unsafe_keywords = ['hack', 'cheat', 'bypass', 'crack', 'exploit', 'steal', 'illegal', 'break into']
         has_unsafe_keywords = any(keyword in lowercase for keyword in unsafe_keywords)
@@ -5771,6 +5863,13 @@ HARMFUL_PATTERNS = [
     r"\bsql injection\b",
     r"\bbrute force\b",
 
+    # Academic misconduct
+    r"\bcheat(ing|s)?\b",
+    r"\bcopy answers\b",
+    r"\bplagiar(i(s|z)e|ism)\b",
+    r"\bbypass attendance\b",
+    r"\bmanipulat(e|ion) (exam|results|grades)?\b",
+
     # Violence paraphrases
     r"\beliminate\b",
     r"\bget rid of\b",
@@ -5800,7 +5899,8 @@ def is_harmful_input(text: str) -> bool:
     # --------------------------------------------
     # If user asks HOW TO + harmful action
     if "how to" in text and any(word in text for word in [
-        "kill", "eliminate", "remove", "neutralize", "destroy"
+        "kill", "eliminate", "remove", "neutralize", "destroy",
+        "hack", "cheat", "copy", "bypass", "manipulat"
     ]):
         return True
 
@@ -5808,7 +5908,7 @@ def is_harmful_input(text: str) -> bool:
     # 3. Additional intent phrases
     # --------------------------------------------
     if "ways to" in text and any(word in text for word in [
-        "kill", "eliminate", "remove", "neutralize"
+        "kill", "eliminate", "remove", "neutralize", "hack", "cheat", "copy", "bypass"
     ]):
         return True
 
@@ -6888,6 +6988,34 @@ class MLEngine:
         self.computation_history = []
     
     def execute(self, query: str, features: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute numerical computation.
+        Args:
+            query: User query
+            features: Features from input analyzer
+        Returns:
+            Dictionary with answer, confidence, strategy
+        """
+        query_lower = features.get("lowercase_text", query.lower())
+
+        # Try direct math expression evaluation first
+        math_expr = re.sub(r'[^0-9\+\-\*/\.\(\) ]', '', query_lower)
+        direct_result = self.compute_expression(math_expr)
+        if direct_result is not None:
+            self.computation_history.append({
+                "query": query,
+                "result": direct_result,
+                "type": "direct_expression"
+            })
+            return {
+                "answer": f"The answer is {direct_result}",
+                "confidence": 1.0,
+                "strategy": "ML",
+                "computation_type": "direct_expression",
+                "reason": "Direct math expression evaluation"
+            }
+
+        # ...existing code...
         """
         Execute numerical computation.
         
@@ -12350,6 +12478,74 @@ if __name__ == "__main__":
 
 ---
 
+### tests/tmp_api_query.py
+
+```py
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+import requests
+
+API = "http://localhost:8001/query"
+
+for q in ["srkr"]:
+    try:
+        r = requests.post(API, json={"query": q}, timeout=10)
+        try:
+            print('Query:', q)
+            print('Status:', r.status_code)
+            print('Response JSON:')
+            print(r.json())
+        except Exception:
+            print('Non-JSON response:', r.text)
+    except Exception as e:
+        print('Request failed:', e)
+
+```
+
+---
+
+### tests/tmp_domain_check.py
+
+```py
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from core.domain_classifier import DomainClassifier
+
+c=DomainClassifier()
+print('model_loaded=', c.is_loaded)
+for q in ['2+2','calculate 2+2','what is 2+2','Explain meta-learning','movie times tonight', 'explain about quantam computing', 'explain about quantum computing', 'srkr', 'SRKR Engineering College', 'srkr engineering college']:
+    d, conf = c.predict(q)
+    print(q, '->', d, conf)
+
+```
+
+---
+
+### tests/tmp_safety_check.py
+
+```py
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from core.safety import is_harmful_input
+
+queries = [
+    "How to cheat on tests?",
+    "How to hack WiFi?",
+    "Ways to copy answers in online exams",
+    "What is quantum computing?",
+    "How to prepare for exams effectively?",
+]
+
+for q in queries:
+    print(q, '->', is_harmful_input(q))
+
+```
+
+---
+
 ### tests/validate_factual_engine_structure.py
 
 ```py
@@ -12496,17 +12692,55 @@ if __name__ == "__main__":
 ```json
 {
   "model_type": "TF-IDF + Logistic Regression",
-  "train_accuracy": 0.9969879518072289,
-  "test_accuracy": 0.8554216867469879,
-  "cv_mean": 0.7903614457831326,
-  "cv_std": 0.10068714417241534,
-  "training_samples": 332,
-  "test_samples": 83,
-  "features": 1953,
+  "train_accuracy": 0.9970501474926253,
+  "test_accuracy": 0.8588235294117647,
+  "cv_mean": 0.8110924369747898,
+  "cv_std": 0.0805923974354777,
+  "training_samples": 339,
+  "test_samples": 85,
+  "features": 2000,
   "classes": [
     "OUTSIDE",
     "STUDENT"
   ]
+}
+```
+
+---
+
+### training/models/engine_selector_metadata.json
+
+```json
+{
+  "model_type": "Random Forest",
+  "train_accuracy": 1.0,
+  "test_accuracy": 1.0,
+  "cv_mean": 1.0,
+  "cv_std": 0.0,
+  "training_samples": 281,
+  "test_samples": 71,
+  "features": [
+    "intent_FACTUAL",
+    "intent_NUMERIC",
+    "intent_EXPLANATION",
+    "intent_UNSAFE",
+    "confidence",
+    "query_length",
+    "word_count",
+    "has_digits",
+    "digit_count",
+    "has_math_operators",
+    "has_question_words",
+    "has_unsafe_keywords",
+    "avg_word_length"
+  ],
+  "classes": [
+    "ML",
+    "RETRIEVAL",
+    "RULE",
+    "TRANSFORMER"
+  ],
+  "n_estimators": 100
 }
 ```
 
@@ -12519,24 +12753,52 @@ if __name__ == "__main__":
   "models": {
     "domain_classifier": {
       "model_name": "domain_classifier",
-      "version": 4,
-      "timestamp": "2026-03-01T14:29:25.161474",
-      "versioned_file": "domain_classifier_v4_2026_03_01_142925.joblib",
+      "version": 8,
+      "timestamp": "2026-03-01T18:50:37.622215",
+      "versioned_file": "domain_classifier_v8_2026_03_01_185037.joblib",
       "canonical_file": "domain_classifier.joblib",
       "metadata": {
         "model_type": "TF-IDF + Logistic Regression",
-        "test_accuracy": 0.8554216867469879,
-        "training_samples": 332
+        "test_accuracy": 0.8588235294117647,
+        "training_samples": 339
       }
     },
     "domain_vectorizer": {
       "model_name": "domain_vectorizer",
-      "version": 4,
-      "timestamp": "2026-03-01T14:29:25.207905",
-      "versioned_file": "domain_vectorizer_v4_2026_03_01_142925.joblib",
+      "version": 8,
+      "timestamp": "2026-03-01T18:50:37.657061",
+      "versioned_file": "domain_vectorizer_v8_2026_03_01_185037.joblib",
       "canonical_file": "domain_vectorizer.joblib",
       "metadata": {
         "model_type": "TF-IDF"
+      }
+    },
+    "engine_selector": {
+      "model_name": "engine_selector",
+      "version": 4,
+      "timestamp": "2026-03-01T18:50:38.523927",
+      "versioned_file": "engine_selector_v4_2026_03_01_185038.joblib",
+      "canonical_file": "engine_selector.joblib",
+      "metadata": {
+        "model_type": "Random Forest",
+        "test_accuracy": 1.0,
+        "training_samples": 281,
+        "n_estimators": 100
+      }
+    },
+    "feedback_intent_model": {
+      "model_name": "feedback_intent_model",
+      "version": 1,
+      "timestamp": "2026-03-01T18:50:19.003238",
+      "versioned_file": "feedback_intent_model_v1_2026_03_01_185018.joblib",
+      "canonical_file": "feedback_intent_model.joblib",
+      "metadata": {
+        "training_samples": 2,
+        "classes": [
+          "FACTUAL",
+          "NUMERIC"
+        ],
+        "satisfaction_rate": 1.0
       }
     }
   },
@@ -12627,6 +12889,161 @@ if __name__ == "__main__":
       "canonical_file": "domain_vectorizer.joblib",
       "metadata": {
         "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 5,
+      "timestamp": "2026-03-01T17:53:15.476098",
+      "versioned_file": "domain_classifier_v5_2026_03_01_175315.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8554216867469879,
+        "training_samples": 332
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 5,
+      "timestamp": "2026-03-01T17:53:15.510768",
+      "versioned_file": "domain_vectorizer_v5_2026_03_01_175315.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "engine_selector",
+      "version": 1,
+      "timestamp": "2026-03-01T17:53:16.469962",
+      "versioned_file": "engine_selector_v1_2026_03_01_175316.joblib",
+      "canonical_file": "engine_selector.joblib",
+      "metadata": {
+        "model_type": "Random Forest",
+        "test_accuracy": 1.0,
+        "training_samples": 281,
+        "n_estimators": 100
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 6,
+      "timestamp": "2026-03-01T18:09:54.997172",
+      "versioned_file": "domain_classifier_v6_2026_03_01_180954.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8554216867469879,
+        "training_samples": 332
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 6,
+      "timestamp": "2026-03-01T18:09:55.037816",
+      "versioned_file": "domain_vectorizer_v6_2026_03_01_180955.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "engine_selector",
+      "version": 2,
+      "timestamp": "2026-03-01T18:09:56.047482",
+      "versioned_file": "engine_selector_v2_2026_03_01_180956.joblib",
+      "canonical_file": "engine_selector.joblib",
+      "metadata": {
+        "model_type": "Random Forest",
+        "test_accuracy": 1.0,
+        "training_samples": 281,
+        "n_estimators": 100
+      }
+    },
+    {
+      "model_name": "engine_selector",
+      "version": 3,
+      "timestamp": "2026-03-01T18:49:19.815478",
+      "versioned_file": "engine_selector_v3_2026_03_01_184919.joblib",
+      "canonical_file": "engine_selector.joblib",
+      "metadata": {
+        "model_type": "Random Forest",
+        "test_accuracy": 1.0,
+        "training_samples": 280,
+        "n_estimators": 100
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 7,
+      "timestamp": "2026-03-01T18:49:57.307787",
+      "versioned_file": "domain_classifier_v7_2026_03_01_184957.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8588235294117647,
+        "training_samples": 339
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 7,
+      "timestamp": "2026-03-01T18:49:57.343574",
+      "versioned_file": "domain_vectorizer_v7_2026_03_01_184957.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "feedback_intent_model",
+      "version": 1,
+      "timestamp": "2026-03-01T18:50:19.003238",
+      "versioned_file": "feedback_intent_model_v1_2026_03_01_185018.joblib",
+      "canonical_file": "feedback_intent_model.joblib",
+      "metadata": {
+        "training_samples": 2,
+        "classes": [
+          "FACTUAL",
+          "NUMERIC"
+        ],
+        "satisfaction_rate": 1.0
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 8,
+      "timestamp": "2026-03-01T18:50:37.622215",
+      "versioned_file": "domain_classifier_v8_2026_03_01_185037.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8588235294117647,
+        "training_samples": 339
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 8,
+      "timestamp": "2026-03-01T18:50:37.657061",
+      "versioned_file": "domain_vectorizer_v8_2026_03_01_185037.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "engine_selector",
+      "version": 4,
+      "timestamp": "2026-03-01T18:50:38.523927",
+      "versioned_file": "engine_selector_v4_2026_03_01_185038.joblib",
+      "canonical_file": "engine_selector.joblib",
+      "metadata": {
+        "model_type": "Random Forest",
+        "test_accuracy": 1.0,
+        "training_samples": 281,
+        "n_estimators": 100
       }
     }
   ]
@@ -13684,369 +14101,333 @@ if __name__ == "__main__":
 ### ui.py
 
 ```py
-"""
-Meta-Learning AI System - ChatGPT-like Interface
-Clean, modern chat interface matching ChatGPT's exact layout and functionality.
-"""
+
 import streamlit as st
+st.set_page_config(page_title="Meta-Learning Academic AI", layout="wide", page_icon="🧠")
+
 import requests
 import json
 from datetime import datetime
 import uuid
 
-# Page configuration
-st.set_page_config(
-    page_title="Meta-Learning AI",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # API endpoint
 API_URL = "http://localhost:8001"
 
-# Clean ChatGPT-style CSS
+# Custom CSS for ChatGPT/Gemini look
 st.markdown("""
 <style>
-    /* Import Inter font */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Remove Streamlit branding and padding */
-    .stApp > header {visibility: hidden;}
-    .stApp > div > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) {visibility: hidden;}
-    .stDeployButton {display: none;}
-    footer {visibility: hidden;}
-    .stActionButton {display: none;}
-    
-    /* Remove default margins and ensure full height */
-    html, body {
-        margin: 0;
-        padding: 0;
-        height: 100vh;
-        overflow: hidden;
-    }
-    
-    /* Streamlit main container fixes */
-    .main {
-        padding: 0 !important;
-        height: 100vh;
-        overflow: hidden;
-    }
-    
-    /* Fix initial scroll position */
-    .stApp {
-        scroll-behavior: smooth;
-        scroll-padding-top: 0;
-    }
-    
-    /* Ensure content starts at top */
-    .main-content {
-        scroll-snap-align: start;
-    }
-    
-    /* Main app container */
-    .main .block-container {
-        padding-top: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
-        padding-bottom: 0rem !important;
-        margin-top: 0rem !important;
-        max-width: none;
-        height: 100vh;
-        overflow: hidden;
-        position: relative;
-    }
-    
-    /* Global font */
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    
-    /* Dark theme - Full viewport */
-    .stApp {
-        background-color: #0D1117;
-        color: #E6EDF3;
-        height: 100vh;
-        overflow: hidden;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background-color: #161B22;
-        border-right: 1px solid #30363D;
-        height: 100vh;
-        overflow-y: auto;
-    }
-    
-    /* Main content area - Full height, scrollable */
-    .main-content {
-        background-color: #0D1117;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-    }
-    
-    /* Messages area - Scrollable */
-    .messages-area {
-        flex: 1;
-        overflow-y: auto;
-        padding-bottom: 140px; /* Space for input */
-        padding-top: 0rem !important; /* Remove top padding */
-        margin-top: 0rem !important; /* Ensure no top margin */
-        position: relative;
-        top: 0;
-    }
-    
-    /* Welcome/Start screen - Fit in viewport */
-    .welcome-container {
-        max-width: 768px;
-        margin: 0 auto;
-        padding: 0.5rem 1rem; /* Minimal top padding */
-        text-align: center;
-    }
-    
-    .welcome-title {
-        font-size: 1.8rem; /* Slightly smaller */
-        font-weight: 600;
-        margin-bottom: 0.8rem; /* Reduced margin */
-        margin-top: 0 !important; /* No top margin */
-        background: linear-gradient(135deg, #58A6FF 0%, #79C0FF 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        text-align: center;
-    }
-    
-    .welcome-subtitle {
-        font-size: 0.95rem; /* Slightly smaller */
-        color: #8B949E;
-        margin-bottom: 1.5rem; /* Reduced margin */
-        max-width: 600px;
-        line-height: 1.5; /* Tighter line height */
-        margin-left: auto;
-        margin-right: auto;
-    }
-    
-    /* Example buttons styling */
-    .stButton > button {
-        background: #161B22 !important;
-        color: #E6EDF3 !important;
-        border: 1px solid #21262D !important;
-        border-radius: 0.75rem !important;
-        font-weight: 400 !important;
-        transition: all 0.2s !important;
-        text-align: left !important;
-        padding: 0.8rem !important; /* Reduced padding */
-        height: auto !important;
-        white-space: normal !important;
-        min-height: 55px !important; /* Reduced min height */
-        margin-bottom: 0.4rem !important; /* Reduced margin */
-    }
-    
-    .stButton > button:hover {
-        background: #21262D !important;
-        border-color: #30363D !important;
-        transform: translateY(-1px) !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
-    }
-    
-    /* Primary buttons (New Chat, Send) */
-    .stButton[data-baseweb="button"][kind="primary"] > button {
-        background: #238636 !important;
-        border-color: #238636 !important;
-        color: white !important;
-    }
-    
-    .stButton[data-baseweb="button"][kind="primary"] > button:hover {
-        background: #2EA043 !important;
-        border-color: #2EA043 !important;
-    }
-    
-    /* Message containers */
-    .message-container {
-        max-width: 768px;
-        margin: 0 auto;
-        padding: 1.5rem 1rem;
-        border-bottom: 1px solid #21262D;
-    }
-    
-    .user-message {
-        background-color: #0D1117;
-    }
-    
-    .ai-message {
-        background-color: #0D1117;
-    }
-    
-    .message-header {
-        display: flex;
-        align-items: center;
-        margin-bottom: 0.75rem;
-        font-weight: 600;
-        font-size: 0.9rem;
-    }
-    
-    .user-avatar {
-        background: #238636;
-        color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 0.75rem;
-        font-size: 14px;
-    }
-    
-    .ai-avatar {
-        background: #58A6FF;
-        color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 0.75rem;
-        font-size: 14px;
-    }
-    
-    .message-content {
-        margin-left: 36px;
-        color: #E6EDF3;
-        font-size: 16px;
-        line-height: 1.6;
-    }
-    
-    .strategy-badge {
-        display: inline-block;
-        padding: 0.25rem 0.5rem;
-        background: rgba(88, 166, 255, 0.15);
-        color: #58A6FF;
-        border-radius: 0.375rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin-bottom: 0.75rem;
-        border: 1px solid rgba(88, 166, 255, 0.3);
-    }
-    
-    .metadata-box {
-        margin-top: 1rem;
-        padding: 0.75rem;
-        background: #161B22;
-        border: 1px solid #21262D;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-    }
-    
-    .confidence-bar {
-        background: #21262D;
-        height: 4px;
-        border-radius: 2px;
-        margin: 0.5rem 0;
-        overflow: hidden;
-    }
-    
-    .confidence-fill {
-        background: #238636;
-        height: 100%;
-        transition: width 0.3s ease;
-    }
-    
-    /* Input section - Fixed at bottom */
-    .input-container {
-        position: fixed;
-        bottom: 0;
-        left: 260px; /* Account for sidebar */
-        right: 0;
-        background: #0D1117;
-        border-top: 1px solid #21262D;
-        padding: 0.8rem; /* Reduced padding */
-        z-index: 1000;
-    }
-    
-    .input-wrapper {
-        max-width: 768px;
-        margin: 0 auto;
-        position: relative;
-    }
-    
-    /* Responsive input on mobile */
-    @media (max-width: 768px) {
-        .input-container {
-            left: 0; /* Full width on mobile */
-        }
-        
-        .messages-area {
-            padding-bottom: 120px; /* Less space on mobile */
-        }
-    }
-    
-    /* Sidebar buttons */
-    .sidebar-button {
-        width: 100%;
-        padding: 0.75rem;
-        margin-bottom: 0.5rem;
-        background: #21262D;
-        border: 1px solid #30363D;
-        border-radius: 0.5rem;
-        color: #E6EDF3;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-size: 0.875rem;
-        text-align: left;
-    }
-    
-    .sidebar-button:hover {
-        background: #30363D;
-        border-color: #484F58;
-    }
-    
-    .new-chat-button {
-        background: #238636;
-        border-color: #238636;
-        font-weight: 500;
-        text-align: center;
-    }
-    
-    .new-chat-button:hover {
-        background: #2EA043;
-        border-color: #2EA043;
-    }
-    
-    /* Example prompt buttons */
-    .example-button {
-        width: 100%;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        background: #161B22;
-        border: 1px solid #21262D;
-        border-radius: 0.75rem;
-        color: #E6EDF3;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: left;
-    }
-    
-    .example-button:hover {
-        background: #21262D;
-        border-color: #30363D;
-    }
-    
-    .example-title {
-        font-weight: 500;
-        margin-bottom: 0.25rem;
-        color: #58A6FF;
-    }
-    
-    .example-text {
+body, html {
+    font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+    background: #18181b;
+    color: #e5e7eb;
+}
+.stApp {
+    background: #18181b;
+}
+.chat-window {
+    max-width: 600px;
+    margin: 40px auto 0 auto;
+    background: #23232a;
+    border-radius: 18px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.18);
+    padding: 0 0 80px 0;
+    min-height: 70vh;
+}
+.message-bubble {
+    display: flex;
+    align-items: flex-start;
+    margin: 18px 0;
+}
+.bubble-user {
+    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+
+
+# --- BACKEND API INTEGRATION ---
+import requests
+API_BASE = "http://localhost:8001/api"
+
+def get_query_history():
+    try:
+        return requests.get(f"{API_BASE}/history").json()
+    except Exception as e:
+        st.error(f"Query history API error: {e}")
+        return []
+
+def get_routing_stats():
+    try:
+        return requests.get(f"{API_BASE}/stats").json()
+    except Exception as e:
+        st.error(f"Routing stats API error: {e}")
+        return {"total":0,"multi_intent":0,"unsafe_blocks":0,"avg_response_ms":0}
+
+def get_model_info():
+    try:
+        return requests.get(f"{API_BASE}/model_info").json()
+    except Exception as e:
+        st.error(f"Model info API error: {e}")
+        return {"model_version":"-","embedding_model":"-","transformer_model":"-","last_retrained":"-","intent_threshold":0,"unsafe_threshold":0,"system_status":"error"}
+
+def submit_query(query):
+    try:
+        return requests.post(f"{API_BASE}/query", json={"query": query}).json()
+    except Exception as e:
+        st.error(f"Query API error: {e}")
+        return None
+
+# --- FETCH DYNAMIC DATA ---
+model_info = get_model_info()
+model_version = model_info.get("model_version", "-")
+embedding_model = model_info.get("embedding_model", "-")
+transformer_model = model_info.get("transformer_model", "-")
+system_status = model_info.get("system_status", "error")
+last_retrained = model_info.get("last_retrained", "-")
+intent_threshold = model_info.get("intent_threshold", 0)
+unsafe_threshold = model_info.get("unsafe_threshold", 0)
+
+query_history = get_query_history()
+routing_stats = get_routing_stats()
+
+# --- HEADER ---
+with st.container():
+    cols = st.columns([1, 3, 2])
+    with cols[0]:
+        st.image("https://img.icons8.com/fluency/96/brain.png", width=48)
+    with cols[1]:
+        st.title("Meta-Learning Academic AI")
+        st.subheader("Multi-Intent Deterministic Orchestration System")
+    with cols[2]:
+        status_color = {"ready": "🟢", "retraining": "🟡", "error": "🔴"}[system_status]
+        st.markdown(f"**System Status:** {status_color} {system_status.capitalize()}")
+        st.markdown(f"**Model Version:** `{model_version}`")
+        st.markdown(f"**Embedding Model:** `{embedding_model}`")
+        st.markdown(f"**Transformer Model:** `{transformer_model}`")
+
+st.markdown("---")
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("Query History")
+    for q in query_history[-10:]:
+        chain_icons = " → ".join([f":blue_circle:" if e != "RULE" else ":red_circle:" for e in q["chain"]])
+        unsafe_badge = "🚫" if q["unsafe"] else ""
+        if st.button(f"{q['query']} {unsafe_badge}", key=q['query']):
+            st.session_state.selected_query = q['query']
+    st.markdown("---")
+    st.header("Routing Statistics")
+    st.metric("Total Queries", routing_stats["total"])
+    st.metric("Multi-Intent %", f"{routing_stats['multi_intent']}%")
+    st.metric("Unsafe Blocks", routing_stats["unsafe_blocks"])
+    st.metric("Avg Response Time (ms)", routing_stats["avg_response_ms"])
+    st.markdown("---")
+    st.header("Model Info")
+    st.metric("Intent Threshold", intent_threshold)
+    st.metric("Unsafe Threshold", unsafe_threshold)
+    st.metric("Last Retrained", last_retrained)
+
+# --- MAIN INPUT SECTION ---
+
+with st.container():
+    st.markdown("### Academic Query")
+    query = st.text_area("Enter your academic question", value=st.session_state.get("selected_query", ""), key="query_input")
+    cols = st.columns([1, 1])
+    submit = cols[0].button("🔍 Submit")
+    clear = cols[1].button("❌ Clear")
+    if clear:
+        st.session_state.query_input = ""
+        st.session_state.selected_query = ""
+        st.session_state.last_result = None
+        st.experimental_rerun()
+    if submit:
+        with st.spinner("Processing..."):
+            result_struct = submit_query(query)
+            if result_struct:
+                st.session_state.last_result = result_struct
+                st.session_state.selected_query = query
+                st.experimental_rerun()
+
+# --- RESPONSE DISPLAY SECTION ---
+if "last_result" in st.session_state:
+    result = st.session_state.last_result
+
+    # --- PANEL A: FINAL ANSWER ---
+    with st.container():
+        st.markdown("## 🧠 Final Answer")
+        if "UNSAFE" in result["intents"]["active_intents"]:
+            st.error("Query blocked by Rule Engine.")
+        elif result["result"]["confidence"] < 0.5:
+            st.info("Low confidence result.")
+        elif len(result["intents"]["active_intents"]) > 1:
+            st.warning("Ambiguous multi-intent routing.")
+        else:
+            st.success(result["result"]["answer"])
+        st.markdown(f"**Explanation:** {result['execution_plan']['chain_reasoning']}")
+        if isinstance(result["result"]["answer"], (int, float)):
+            st.metric("Numeric Result", result["result"]["answer"])
+        st.markdown("---")
+
+    # --- PANEL B: INTENT ANALYSIS ---
+    with st.expander("Intent Analysis"):
+        scores = result["intents"]["all_scores"]
+        active_intents = set(result["intents"].get("active_intents", []))
+        # Only show scores for active intents
+        filtered_scores = [(intent, score) for intent, score in scores.items() if intent in active_intents]
+        if filtered_scores:
+            df = pd.DataFrame(filtered_scores, columns=["Intent", "Score"])
+            st.dataframe(df.style.highlight_max(axis=0, subset=["Score"], color="lightgreen"), use_container_width=True)
+        else:
+            st.info("No relevant intent scores for this query.")
+        st.markdown(f"**Active Intents:** {', '.join(result['intents']['active_intents'])}")
+        st.markdown(f"**Threshold Used:** {result['intents']['threshold_used']}")
+        st.markdown(f"**Primary Intent:** {result['intents']['sorted_intents'][0]}")
+
+    # --- PANEL C: EXECUTION PLAN ---
+    with st.expander("Execution Plan"):
+        chain = result["execution_plan"]["engine_chain"]
+        chain_str = " → ".join(chain)
+        st.markdown(f"**Engine Chain:** {chain_str}")
+        st.markdown(f"**Chain Reasoning:** {result['execution_plan']['chain_reasoning']}")
+        st.markdown(f"**Number of Engines Used:** {result['execution_plan']['num_engines']}")
+
+    # --- PANEL D: PERFORMANCE METRICS ---
+    with st.expander("Performance Metrics"):
+        st.metric("Classification Time (ms)", result["metadata"]["classification_time_ms"])
+        st.metric("Confidence", result["result"]["confidence"])
+        st.metric("Model Used", model_version)
+        st.metric("Timestamp", result["metadata"]["timestamp"])
+
+    # --- PANEL E: SAFETY BLOCK (If Applicable) ---
+    if "UNSAFE" in result["intents"]["active_intents"]:
+        with st.container():
+            st.error("🚨 Query blocked by Rule Engine.")
+            st.markdown("**Category:** UNSAFE")
+            st.markdown(f"**Confidence:** {scores['UNSAFE']}")
+            st.markdown("**Logged:** Yes")
+
+    # --- EXECUTION FLOW VISUALIZATION ---
+    st.markdown("### Execution Flow")
+    flow_steps = ["Semantic Classification", "Execution Planner"] + chain + ["Validation"]
+    flow_cols = st.columns(len(flow_steps))
+    for i, step in enumerate(flow_steps):
+        with flow_cols[i]:
+            st.markdown(f"**{step}**")
+            st.markdown(":arrow_down:" if i < len(flow_steps)-1 else "")
+
+    # --- RETRAINING NOTIFICATION ---
+    if result["status"] == "ready":
+        st.markdown("<span style='color:green; font-size:0.9rem;'>Query stored for automatic retraining.</span>", unsafe_allow_html=True)
+    # Optional: Admin mode toggle
+    if st.checkbox("Admin Mode"):
+        st.markdown("#### Retraining Logs")
+        st.info("Model retrained on 2026-02-28. No errors detected.")
+    # Minimal sidebar (collapsed by default)
+    with st.sidebar:
+        st.markdown("<div style='padding: 1rem 0; text-align:center;'><span style='font-size:2rem;'>🧠</span><br><b>Meta-Learning AI</b></div>", unsafe_allow_html=True)
+        if st.button("➕ New chat", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.current_session = str(uuid.uuid4())
+            st.rerun()
+        st.markdown("---")
+        st.markdown("<small style='color:#8B949E;'>Inspired by ChatGPT & Gemini</small>", unsafe_allow_html=True)
+
+    # Chat header
+    st.markdown("<div class='chat-header'>Meta-Learning AI</div>", unsafe_allow_html=True)
+    st.markdown("<div class='chat-subtitle'>Advanced AI orchestration. Ask anything!</div>", unsafe_allow_html=True)
+
+    # Example questions (like ChatGPT/Gemini)
+    if not st.session_state.messages:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📚 **Factual Query** What is the minimum attendance requirement?", use_container_width=True):
+                # Set pending AI query so it is processed immediately
+                st.session_state.pending_ai_query = "What is the minimum attendance requirement?"
+                st.experimental_rerun()
+        with col2:
+            if st.button("🔢 **Numeric Calculation** Calculate 25 * 16 + 144", use_container_width=True):
+                st.session_state.pending_ai_query = "Calculate 25 * 16 + 144"
+                st.experimental_rerun()
+        col3, col4 = st.columns(2)
+        with col3:
+            if st.button("💡 **Explanation Request** Explain how meta-learning works", use_container_width=True):
+                st.session_state.pending_ai_query = "Explain how meta-learning works"
+                st.experimental_rerun()
+        with col4:
+            if st.button("🎯 **System Inquiry** What are the benefits of AI orchestration?", use_container_width=True):
+                st.session_state.pending_ai_query = "What are the benefits of AI orchestration?"
+                st.experimental_rerun()
+        st.markdown("<div style='text-align:center; color:#8B949E; margin-top:60px;'>Start a new conversation. Your messages will appear here.</div>", unsafe_allow_html=True)
+    else:
+        for msg in st.session_state.messages:
+            role = msg["role"]
+            content = msg["content"]
+            if role == "user":
+                # User messages on the LEFT (avatar then bubble)
+                st.markdown(
+                    f"<div class='message-bubble' style='justify-content:flex-start;'><div class='avatar avatar-user'>U</div><div class='bubble-user'>{content}</div></div>",
+                    unsafe_allow_html=True
+                )
+            else:
+                # AI / system messages on the RIGHT (bubble then avatar)
+                st.markdown(
+                    f"<div class='message-bubble' style='justify-content:flex-end;'><div class='bubble-ai'>{content}</div><div class='avatar avatar-ai'>AI</div></div>",
+                    unsafe_allow_html=True
+                )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Floating input area - hide while a query is pending/processing
+    if "pending_ai_query" not in st.session_state:
+        st.markdown("<div class='input-floating'>", unsafe_allow_html=True)
+        st.markdown("<div class='input-inner'>", unsafe_allow_html=True)
+        user_input = st.text_input("", value=st.session_state.get("input_text", ""), max_chars=2000, placeholder="Type your message and press Enter...", key="input_box", label_visibility="collapsed")
+        send_clicked = st.button("Send", key="send_btn", help="Send message", use_container_width=False)
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        # Ensure variables exist when input is hidden
+        user_input = ""
+        send_clicked = False
+
+    # Handle API status
+    api_healthy = check_api_health()
+    if not api_healthy:
+        st.error("🚨 **API Server Offline** - Please start the FastAPI server: `python app.py`")
+        st.stop()
+
+    # Handle pending query from example buttons
+    pending_query = st.session_state.get("pending_query", "")
+    if "pending_query" in st.session_state:
+        del st.session_state.pending_query
+    if user_input:
+        st.session_state.input_text = user_input
+
+    # Process message ONLY when Send button is clicked
+    if send_clicked and user_input and user_input.strip():
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_input.strip()
+        })
+        st.session_state.pending_ai_query = user_input.strip()
+        st.session_state.input_text = ""
+        st.rerun()
+
+    # Process AI response if we have a pending query
+    if "pending_ai_query" in st.session_state:
+        query = st.session_state.pending_ai_query
+        del st.session_state.pending_ai_query
+        with st.spinner("🤔 Thinking..."):
+            result, error = send_query(query)
+        if error:
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": f"❌ **Error:** {error}"
+            })
+        elif result:
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": result
+            })
+        session_id = st.session_state.current_session
+        st.session_state.chat_sessions[session_id] = st.session_state.messages.copy()
+        st.rerun()
         font-size: 0.875rem;
         color: #8B949E;
     }
@@ -14345,14 +14726,17 @@ def render_message(msg, msg_type="user"):
 
             st.markdown("### 🧠 Meta-Learning AI")
 
-            # Strategy badge
-            st.markdown(f"**Strategy:** {strategy}")
+            # Strategy badge (show emoji + pretty label)
+            pretty_strategy = strategy.replace("_", " ").title()
+            st.markdown(f"**Strategy:** {get_strategy_emoji(strategy)} {pretty_strategy}")
             st.write(answer)
 
             with st.expander("Orchestration Details"):
-                st.write("**Active Intents:**", ", ".join(active_intents) or "N/A")
-                st.write("**Execution Chain:**", " → ".join(engine_chain) or "N/A")
-                st.write("**Confidence:**", f"{confidence:.1%}")
+                active_str = ", ".join(active_intents) if active_intents else "N/A"
+                chain_str = " → ".join(engine_chain) if engine_chain else "N/A"
+                st.write(f"**Active Intents:** {active_str}")
+                st.write(f"**Execution Chain:** {chain_str}")
+                st.write(f"**Confidence:** {confidence:.1%}")
 
                 if intent_scores:
                     st.write("**Intent Scores:**")
@@ -14429,6 +14813,23 @@ def main():
             st.markdown("API Endpoint: `localhost:8001`")
             if st.button("🔄 Refresh API Status"):
                 st.rerun()
+
+                # Retrain Models from Feedback Button
+                st.markdown("---")
+                if st.button("🧠 Retrain Models from Feedback", help="Retrain domain and engine-selector models using collected user feedback."):
+                    import subprocess
+                    with st.spinner("Retraining models from feedback..."):
+                        try:
+                            result = subprocess.run([
+                                "python", "training/retrain_from_feedback.py"
+                            ], capture_output=True, text=True, timeout=120)
+                            if result.returncode == 0:
+                                st.success("✅ Models retrained successfully from feedback!")
+                                st.text(result.stdout)
+                            else:
+                                st.error(f"❌ Retraining failed: {result.stderr}")
+                        except Exception as e:
+                            st.error(f"❌ Error during retraining: {str(e)}")
         
         st.markdown('</div>', unsafe_allow_html=True)
     

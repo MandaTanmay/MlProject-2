@@ -251,7 +251,27 @@ async def process_query(request: QueryRequest):
                     "intent_confidence": 1.0
                 }
             )
+
+        # ------------------------------------------------
+        # STEP 2: NUMERIC FAST-PATH (Bypass Domain)
+        # ------------------------------------------------
+        features = input_analyzer.analyze(query)
+        print("NUMERIC FEATURES:", features)
+        if features.get("question_type") == "NUMERIC":
+            result = ml_engine.execute(query, features)
         
+            return QueryResponse(
+                answer=result["answer"],
+                strategy="ML",
+                confidence=result.get("confidence", 1.0),
+                reason="Numeric query detected - bypassed domain filter",
+                metadata={
+                    "intent": "NUMERIC",
+                    "intent_confidence": 1.0,
+                    "engine_chain": ["ML_ENGINE"]
+                }
+            )
+                
         # ------------------------------------------------
         # STEP 2: Domain Classification
         # ------------------------------------------------
