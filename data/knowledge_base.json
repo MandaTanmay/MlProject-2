@@ -72,8 +72,8 @@
     {
       "id": "fact_007",
       "question": "What is the capital of Brazil?",
-      "answer": "Brasília",
-      "structured_value": "Brasília",
+      "answer": "Bras\u00edlia",
+      "structured_value": "Bras\u00edlia",
       "entity": "Brazil",
       "category": "geography",
       "source": "Academic Knowledge Base",
@@ -506,6 +506,66 @@
       "source": "R23_REGULATIONS.pdf",
       "verified": true,
       "verified_date": "2026-02-28"
+    },
+    {
+      "id": "ef38a778-a72d-44c7-8ff4-6e0b9eb90848",
+      "question": "What is Artificial Intelligence?",
+      "answer": "Artificial intelligence (AI) is the capability of computational systems to perform tasks typically associated with human intelligence, such as learning, reasoning, problem-solving, perception, and decision-making. It is a field of research in computer science that develops and studies methods and software that enable machines to perceive their environment and use learning and intelligence to take actions that maximize their chances of achieving defined goals.\nHigh-profile applications of AI include advanced web search engines (e.g., Google Search); recommendation systems (used by YouTube, Amazon, and Netflix); virtual assistants (e.g., Google Assistant, Siri, and Alexa); autonomous vehicles (e.g., Waymo); generative and creative tools (e.g., language models and AI art); and superhuman play and analysis in strategy games (e.g., chess and Go).",
+      "structured_value": "Artificial intelligence (AI) is the capability of computational systems to perform tasks typically associated with human intelligence, such as learning, reasoning, problem-solving, perception, and dec",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "575f6330-dbb1-4822-8806-f4ee10f89d93",
+      "question": "What is Deep Learning?",
+      "answer": "In machine learning, deep learning (DL) focuses on utilizing multilayered neural networks to perform tasks such as classification, regression, and representation learning. The field takes inspiration from biological neuroscience and revolves around stacking artificial neurons into layers and \"training\" them to process data. The adjective \"deep\" refers to the use of multiple layers (ranging from three to several hundred or thousands) in the network.",
+      "structured_value": "In machine learning, deep learning (DL) focuses on utilizing multilayered neural networks to perform tasks such as classification, regression, and representation learning. The field takes inspiration ",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "fbf7904e-fc8d-4e95-b0d2-103e9842fa24",
+      "question": "What is Web Browser?",
+      "answer": "A web browser, often abbreviated as browser, is an application for accessing websites. When a user requests a web page from a particular website, the browser retrieves its files from a web server and then displays the page on the user's screen. Browsers can also display content stored locally on the user's device.",
+      "structured_value": "A web browser, often abbreviated as browser, is an application for accessing websites. When a user requests a web page from a particular website, the browser retrieves its files from a web server and ",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "3d056cb6-52a2-4be5-9c97-4787dd2b8894",
+      "question": "What is Operating System?",
+      "answer": "An operating system (OS) is system software that manages computer hardware and software resources, and provides common services for computer programs.\nTime-sharing operating systems schedule tasks for efficient use of the system and may also include accounting software for cost allocation of processor time, mass storage, peripherals, and other resources.\nFor hardware functions such as input and output and memory allocation, the operating system acts as an intermediary between programs and the computer hardware, although the application code is usually executed directly by the hardware and frequently makes system calls to an OS function or is interrupted by it.",
+      "structured_value": "An operating system (OS) is system software that manages computer hardware and software resources, and provides common services for computer programs.\nTime-sharing operating systems schedule tasks for",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "64c878cb-a42d-4c09-b0b2-e5c6507d4303",
+      "question": "What is Cloud Computing?",
+      "answer": "Cloud computing is defined by the International Organization for Standardization (ISO) as \"a paradigm for enabling network access to a scalable and elastic pool of shareable physical or virtual resources with self-service provisioning and administration on demand\". It is commonly referred to as \"the cloud\".\n\n\n== Characteristics ==\nIn 2011, the National Institute of Standards and Technology (NIST) identified five \"essential characteristics\" for cloud systems.",
+      "structured_value": "Cloud computing is defined by the International Organization for Standardization (ISO) as \"a paradigm for enabling network access to a scalable and elastic pool of shareable physical or virtual resour",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
+    },
+    {
+      "id": "a20e5b37-bfb9-4c99-af5d-d9a57589845a",
+      "question": "What is Data Science?",
+      "answer": "Data science is an interdisciplinary academic field that uses statistics, scientific computing, scientific methods, processing, scientific visualization, algorithms, and systems to extract or extrapolate knowledge from potentially noisy, structured, or unstructured data. \nData science also integrates domain knowledge from the underlying application domain (e.g., natural sciences, information technology, and medicine). Data science is multifaceted and can be described as a science, a research paradigm, a research method, a discipline, a workflow, and a profession.",
+      "structured_value": "Data science is an interdisciplinary academic field that uses statistics, scientific computing, scientific methods, processing, scientific visualization, algorithms, and systems to extract or extrapol",
+      "category": "technology",
+      "source": "Wikipedia",
+      "verified": true,
+      "verified_date": "2026-03-01"
     }
   ]
 }
