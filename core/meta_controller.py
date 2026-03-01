@@ -35,7 +35,7 @@ class MetaController:
         """Initialize the meta-controller with semantic intent classifier."""
         self.intent_classifier = SemanticIntentClassifier(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
-            intent_threshold=0.60,
+            intent_threshold=0.70,
             unsafe_threshold=0.50
         )
         

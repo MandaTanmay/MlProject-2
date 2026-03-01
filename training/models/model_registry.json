@@ -2,21 +2,21 @@
   "models": {
     "domain_classifier": {
       "model_name": "domain_classifier",
-      "version": 8,
-      "timestamp": "2026-03-01T18:50:37.622215",
-      "versioned_file": "domain_classifier_v8_2026_03_01_185037.joblib",
+      "version": 10,
+      "timestamp": "2026-03-01T20:05:53.409908",
+      "versioned_file": "domain_classifier_v10_2026_03_01_200553.joblib",
       "canonical_file": "domain_classifier.joblib",
       "metadata": {
         "model_type": "TF-IDF + Logistic Regression",
-        "test_accuracy": 0.8588235294117647,
-        "training_samples": 339
+        "test_accuracy": 0.8863636363636364,
+        "training_samples": 349
       }
     },
     "domain_vectorizer": {
       "model_name": "domain_vectorizer",
-      "version": 8,
-      "timestamp": "2026-03-01T18:50:37.657061",
-      "versioned_file": "domain_vectorizer_v8_2026_03_01_185037.joblib",
+      "version": 10,
+      "timestamp": "2026-03-01T20:05:53.449256",
+      "versioned_file": "domain_vectorizer_v10_2026_03_01_200553.joblib",
       "canonical_file": "domain_vectorizer.joblib",
       "metadata": {
         "model_type": "TF-IDF"
@@ -296,6 +296,7 @@
       }
     },
     {
+<<<<<<< HEAD
       "model_name": "engine_selector",
       "version": 5,
       "timestamp": "2026-03-01T20:01:39.741396",
@@ -306,6 +307,49 @@
         "test_accuracy": 1.0,
         "training_samples": 280,
         "n_estimators": 100
+=======
+      "model_name": "domain_classifier",
+      "version": 9,
+      "timestamp": "2026-03-01T19:24:39.713339",
+      "versioned_file": "domain_classifier_v9_2026_03_01_192439.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8863636363636364,
+        "training_samples": 349
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 9,
+      "timestamp": "2026-03-01T19:24:39.744087",
+      "versioned_file": "domain_vectorizer_v9_2026_03_01_192439.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+      }
+    },
+    {
+      "model_name": "domain_classifier",
+      "version": 10,
+      "timestamp": "2026-03-01T20:05:53.409908",
+      "versioned_file": "domain_classifier_v10_2026_03_01_200553.joblib",
+      "canonical_file": "domain_classifier.joblib",
+      "metadata": {
+        "model_type": "TF-IDF + Logistic Regression",
+        "test_accuracy": 0.8863636363636364,
+        "training_samples": 349
+      }
+    },
+    {
+      "model_name": "domain_vectorizer",
+      "version": 10,
+      "timestamp": "2026-03-01T20:05:53.449256",
+      "versioned_file": "domain_vectorizer_v10_2026_03_01_200553.joblib",
+      "canonical_file": "domain_vectorizer.joblib",
+      "metadata": {
+        "model_type": "TF-IDF"
+>>>>>>> 462bf7b12add1ab70934a0c58ce88f2a4cc43917
       }
     }
   ]

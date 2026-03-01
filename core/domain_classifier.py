@@ -1,297 +1,70 @@
 """
-Domain Classifier - STUDENT vs OUTSIDE Domain Enforcement
-First-level gatekeeper that blocks all non-academic queries.
-This is MANDATORY - no queries pass without domain verification.
+Semantic Domain Classifier - STRICT ACADEMIC MODE
+
+Uses SentenceTransformer embeddings + Logistic Regression.
+Pure semantic classification.
 """
+
 from typing import Tuple
 from pathlib import Path
 import joblib
-import warnings
-import re
-import difflib
-import json
-
-warnings.filterwarnings('ignore')
+from sentence_transformers import SentenceTransformer
 
 
 class DomainClassifier:
-    """
-    Binary classifier that determines if a query is academic (STUDENT) or not (OUTSIDE).
-    Uses TF-IDF + Logistic Regression for fast, accurate domain classification.
-    
-    Target accuracy: > 95%
-    """
-    
+
     DOMAINS = ["STUDENT", "OUTSIDE"]
-    
-    # Strict refusal message for OUTSIDE domain
     REFUSAL_MESSAGE = "This system is restricted to academic student-related queries only."
-    
+
     def __init__(self, model_dir: str = None):
-        """
-        Initialize domain classifier.
-        
-        Args:
-            model_dir: Directory containing trained models
-        """
+
         if model_dir is None:
             model_dir = Path(__file__).parent.parent / "training" / "models"
-        
+
         self.model_dir = Path(model_dir)
-        self.vectorizer = None
+        self.classifier_path = self.model_dir / "domain_classifier_semantic.joblib"
+
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.classifier = None
         self.is_loaded = False
-        self._kb = None
-        self._kb_tokens = set()
-        self._kb_token_list = []
-        self._word_re = re.compile(r"\w+")
-        self._numeric_re = re.compile(r'^[\d\s\+\-\*\/\^\.\%\(\)]+$')
-        # Precompute keyword sets for fast membership checks
-        self.srkr_keywords = set([
-            'srkr', 'b.tech', 'btech', 'jntuk', 'naac', 'aicte', 
-            'r23', 'regulation', 'credits', 'cgpa', 'gpa', 'semester',
-            'attendance', 'grading', 'evaluation', 'internship', 'project',
-            'elective', 'mooc', 'honours', 'honors', 'minor', 'induction',
-            'pass marks', 'revaluation', 'malpractice', 'promotion',
-            'medium of instruction', 'programme duration', 'credit transfer'
-        ])
-        self.fuzzy_keywords = [
-            'quantum', 'quantum computing', 'machine learning', 'artificial intelligence',
-            'algorithm', 'mathematics', 'physics', 'chemistry', 'biology', 'computer', 'programming'
-        ]
-        
-        # Try to load trained models
-        self.load_models()
-        # Load KB and build cached token sets to avoid doing this on every predict call
+
+        self._load()
+
+    def _load(self):
         try:
-            self._load_kb()
-        except Exception:
-            # Keep it safe; KB is optional
-            pass
-
-    def _load_kb(self):
-        """
-        Load knowledge base and build token sets / lists used for fast matching and fuzzy lookup.
-        """
-        kb_path = Path(__file__).parent.parent / "data" / "knowledge_base.json"
-        if kb_path.exists():
-            with open(kb_path, "r", encoding="utf-8") as f:
-                self._kb = json.load(f)
-        else:
-            self._kb = {"facts": []}
-
-        if not self._kb_tokens:
-            for fact in self._kb.get("facts", []):
-                for field in ("entity", "question", "id"):
-                    val = fact.get(field, "")
-                    if not val:
-                        continue
-                    val_l = val.lower()
-                    # add full phrase
-                    self._kb_tokens.add(val_l)
-                    # add individual tokens
-                    for tok in self._word_re.findall(val_l):
-                        if len(tok) > 1:
-                            self._kb_tokens.add(tok)
-
-            # also prepare list for difflib fuzzy matching (stable order)
-            self._kb_token_list = list(self._kb_tokens)
-    
-    def load_models(self) -> bool:
-        """
-        Load trained domain classification models.
-        
-        Returns:
-            True if models loaded successfully, False otherwise
-        """
-        try:
-            vectorizer_path = self.model_dir / "domain_vectorizer.joblib"
-            classifier_path = self.model_dir / "domain_classifier.joblib"
-            
-            if vectorizer_path.exists() and classifier_path.exists():
-                self.vectorizer = joblib.load(vectorizer_path)
-                self.classifier = joblib.load(classifier_path)
+            if self.classifier_path.exists():
+                self.classifier = joblib.load(self.classifier_path)
                 self.is_loaded = True
-                print(f"✓ Domain classifier loaded (TF-IDF + Logistic Regression)")
-                return True
+                print("✓ Semantic Domain Classifier loaded")
             else:
-                print(f"⚠ Domain classifier models not found. Using fallback classification.")
-                print(f"   Expected: {vectorizer_path}")
-                print(f"   Run training/train_domain_model.py to create models.")
-                return False
-                
+                print("✗ Semantic domain model not found. Train it first.")
         except Exception as e:
-            print(f"✗ Failed to load domain classifier: {e}")
-            return False
-    
+            print("✗ Failed to load domain classifier:", e)
+            self.is_loaded = False
+
     def predict(self, query: str) -> Tuple[str, float]:
-        """
-        Predict whether query is STUDENT (academic) or OUTSIDE domain.
-        
-        Args:
-            query: User query string
-            
-        Returns:
-            Tuple of (domain, confidence_score)
-        """
-        query_lower = query.lower()
 
-        # Quick KB lookup: accept short/simple queries that match knowledge base
-        q_stripped = query_lower.strip()
-        if len(q_stripped) <= 30 and self._kb_tokens:
-            # exact token or phrase match
-            if q_stripped in self._kb_tokens:
-                return "STUDENT", 0.95
-            # substring containment checks (favor exact match first)
-            for phrase in self._kb_token_list:
-                if q_stripped == phrase or q_stripped in phrase or phrase in q_stripped:
-                    return "STUDENT", 0.95
-            # fuzzy match using prebuilt list
-            try:
-                match = difflib.get_close_matches(q_stripped, self._kb_token_list, n=1, cutoff=0.78)
-                if match:
-                    return "STUDENT", 0.90
-            except Exception:
-                pass
-
-        # SRKR / academic keyword quick checks (substring-based for short strings)
-        if any(kw in query_lower for kw in self.srkr_keywords):
-            return "STUDENT", 0.95
-
-        # Quick numeric/arithmetic detection: allow standalone math expressions
-        if self._numeric_re.match(query.strip()):
-            return "STUDENT", 0.99
-
-        # Fuzzy keyword check: catch academic keywords even if slightly misspelled
-        tokens = self._word_re.findall(query_lower)
-        for tok in tokens:
-            try:
-                match = difflib.get_close_matches(tok, self.fuzzy_keywords, n=1, cutoff=0.8)
-                if match:
-                    return "STUDENT", 0.90
-            except Exception:
-                continue
-        
         if not self.is_loaded:
-            # Fallback to rule-based classification
-            return self._fallback_prediction(query)
-        
+            return "OUTSIDE", 1.0
+
         try:
-            query_vec = self.vectorizer.transform([query])
+            embedding = self.embedding_model.encode([query])
+            probabilities = self.classifier.predict_proba(embedding)[0]
 
-            
-
-            probabilities = self.classifier.predict_proba(query_vec)[0]
-
-            # Extract probabilities properly
             student_index = list(self.classifier.classes_).index("STUDENT")
             outside_index = list(self.classifier.classes_).index("OUTSIDE")
 
             student_prob = probabilities[student_index]
             outside_prob = probabilities[outside_index]
 
-            confidence = max(student_prob, outside_prob)
-
-            # -----------------------------
-            # STRICT ACADEMIC POLICY
-            # -----------------------------
-
-            STUDENT_THRESHOLD = 0.65
-            MARGIN_THRESHOLD = 0.15
-
-            margin = student_prob - outside_prob
-
-            if student_prob >= STUDENT_THRESHOLD and margin >= MARGIN_THRESHOLD:
+            if student_prob >= 0.60:
                 return "STUDENT", float(student_prob)
             else:
                 return "OUTSIDE", float(outside_prob)
-            
+
         except Exception as e:
-            print(f"✗ Domain prediction error: {e}")
-            return self._fallback_prediction(query)
-    
-    def _fallback_prediction(self, query: str) -> Tuple[str, float]:
-        """
-        Fallback rule-based domain classification when model not available.
-        
-        Args:
-            query: User query string
-            
-        Returns:
-            Tuple of (domain, confidence_score)
-        """
-        query_lower = query.lower()
-        
-        # Academic keywords indicating STUDENT domain
-        academic_keywords = [
-            'course', 'class', 'lecture', 'professor', 'exam', 'test',
-            'assignment', 'homework', 'grade', 'gpa', 'cgpa', 'credits',
-            'semester', 'college', 'university', 'student', 'attendance',
-            'library', 'lab', 'syllabus', 'curriculum', 'admission',
-            'degree', 'major', 'minor', 'thesis', 'research', 'project',
-            'scholarship', 'tuition', 'dean', 'faculty', 'department',
-            'campus', 'hostel', 'cafeteria', 'sports complex',
-            'placement', 'internship', 'career', 'coding', 'programming',
-            'algorithm', 'data structure', 'machine learning', 'ai',
-            'artificial intelligence', 'python', 'java', 'database',
-            'web development', 'software', 'mathematics', 'physics',
-            'chemistry', 'biology', 'engineering', 'science', 'study',
-            'learning', 'education', 'academic', 'school'
-        ]
-        
-        # Non-academic keywords indicating OUTSIDE domain
-        outside_keywords = [
-            'movie', 'film', 'cinema', 'actor', 'actress', 'director',
-            'politics', 'politician', 'election', 'government', 'president',
-            'prime minister', 'parliament', 'congress', 'party',
-            'cricket', 'football', 'basketball', 'sports', 'match', 'tournament',
-            'player', 'team', 'score', 'winner', 'champion',
-            'recipe', 'cooking', 'restaurant', 'food', 'dish',
-            'weather', 'forecast', 'temperature', 'rain', 'climate',
-            'travel', 'vacation', 'hotel', 'flight', 'destination',
-            'shopping', 'buy', 'price', 'discount', 'sale',
-            'celebrity', 'gossip', 'entertainment', 'show', 'series',
-            'stock market', 'shares', 'trading', 'investment',
-            'medical diagnosis', 'disease', 'symptoms', 'medicine',
-            'legal advice', 'lawyer', 'court', 'lawsuit'
-        ]
-        
-        # Count keyword matches
-        academic_score = sum(1 for kw in academic_keywords if kw in query_lower)
-        outside_score = sum(1 for kw in outside_keywords if kw in query_lower)
-        
-        # Decision logic
-        if outside_score > academic_score:
-            return "OUTSIDE", 0.85
-        elif academic_score > 0:
-            return "STUDENT", 0.85
-        else:
-            # Ambiguous - default to STUDENT domain with low confidence
-            # (allows academic queries without specific keywords)
-            # NOTE: previously returned OUTSIDE here which caused simple
-            # numeric/math queries (e.g. "2+2") to be blocked. Return
-            # STUDENT by default to align with the comment and intended behavior.
-            return "STUDENT", 0.6
-    
+            print("Domain prediction error:", e)
+            return "OUTSIDE", 1.0
+
     def get_refusal_message(self) -> str:
-        """
-        Get the standard refusal message for OUTSIDE domain queries.
-        
-        Returns:
-            Refusal message string
-        """
         return self.REFUSAL_MESSAGE
-    
-    def get_stats(self) -> dict:
-        """
-        Get domain classifier statistics.
-        
-        Returns:
-            Dictionary with classifier stats
-        """
-        return {
-            "model_loaded": self.is_loaded,
-            "domains": self.DOMAINS,
-            "target_accuracy": "> 95%",
-            "model_type": "TF-IDF + Logistic Regression" if self.is_loaded else "Rule-based fallback"
-        }
