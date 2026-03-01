@@ -189,36 +189,47 @@ class SemanticIntentClassifier:
             return self._fallback_classification(query)
     
     def _get_active_intents(self, scores: Dict[str, float]) -> List[str]:
-        """
-        Determine which intents are active based on thresholds.
-        
-        UNSAFE has lower threshold (more conservative).
-        All other intents use standard threshold.
-        
-        Args:
-            scores: Dictionary of intent -> similarity score
-            
-        Returns:
-            List of active intents
-        """
-        active = []
-        
-        # UNSAFE always checked with lower threshold
-        if scores.get("UNSAFE", 0) > self.unsafe_threshold:
-            active.append("UNSAFE")
-        
-        # Other intents use standard threshold
-        for intent in ["FACTUAL", "NUMERIC", "EXPLANATION"]:
-            if scores.get(intent, 0) > self.intent_threshold:
-                active.append(intent)
-        
-        # Always return at least one intent (primary)
-        if not active:
-            # If nothing exceeds threshold, use primary intent
-            primary = max(scores, key=scores.get)
-            active = [primary]
-        
-        return active
+          """
+          Determine active intents with dominance margin logic.
+          Prevent weak NUMERIC hijacking factual queries.
+          """
+      
+          active = []
+      
+          # 1️⃣ UNSAFE override (highest priority)
+          if scores.get("UNSAFE", 0) > self.unsafe_threshold:
+              return ["UNSAFE"]
+      
+          # 2️⃣ Sort intents by score
+          sorted_intents = sorted(
+              ["FACTUAL", "NUMERIC", "EXPLANATION"],
+              key=lambda i: scores.get(i, 0),
+              reverse=True
+          )
+      
+          top_intent = sorted_intents[0]
+          second_intent = sorted_intents[1]
+      
+          top_score = scores.get(top_intent, 0)
+          second_score = scores.get(second_intent, 0)
+      
+          # 3️⃣ Only activate if above threshold
+          if top_score < self.intent_threshold:
+              return [top_intent]
+      
+          # 4️⃣ Add dominance margin (critical fix)
+          dominance_margin = 0.15
+      
+          if top_score - second_score >= dominance_margin:
+              return [top_intent]
+      
+          # 5️⃣ If close scores → allow hybrid
+          hybrid = [
+              intent for intent in sorted_intents
+              if scores.get(intent, 0) >= self.intent_threshold
+          ]
+      
+          return hybrid if hybrid else [top_intent]
     
     def _fallback_classification(self, query: str) -> Dict[str, Any]:
         """
